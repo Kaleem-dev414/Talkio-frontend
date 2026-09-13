@@ -90,13 +90,13 @@ async function decryptMessage(m,me,privateKey){if(!m.encrypted||!m.ciphertext)re
 
 export default function App(){
  const[token,setToken]=useState(localStorage.getItem(TK)||'');const[me,setMe]=useState(null);const[authMode,setAuthMode]=useState('login');const[err,setErr]=useState('');const[adminTemp,setAdminTemp]=useState('');const[adminBundle,setAdminBundle]=useState(null);
- const[settingsOpen,setSettingsOpen]=useState(false),[settingsPage,setSettingsPage]=useState(''),[lang,setLang]=useState(localStorage.getItem('talkioLang')||'en'),[users,setUsers]=useState([]),[searchResults,setSearchResults]=useState([]),[requests,setRequests]=useState({incoming:[],outgoing:[]}),[locks,setLocks]=useState([]),[chats,setChats]=useState([]),[selected,setSelected]=useState(null),[messages,setMessages]=useState([]),[text,setText]=useState(''),[tab,setTab]=useState('chats'),[chatFilter,setChatFilter]=useState('all'),[search,setSearch]=useState(''),[typing,setTyping]=useState(false),[statuses,setStatuses]=useState([]),[statusViewer,setStatusViewer]=useState(null),[showStatusAdd,setShowStatusAdd]=useState(false);
+ const[settingsOpen,setSettingsOpen]=useState(false),[moreMenuOpen,setMoreMenuOpen]=useState(false),[settingsPage,setSettingsPage]=useState(''),[lang,setLang]=useState(localStorage.getItem('talkioLang')||'en'),[users,setUsers]=useState([]),[searchResults,setSearchResults]=useState([]),[requests,setRequests]=useState({incoming:[],outgoing:[]}),[locks,setLocks]=useState([]),[chats,setChats]=useState([]),[selected,setSelected]=useState(null),[messages,setMessages]=useState([]),[text,setText]=useState(''),[tab,setTab]=useState('chats'),[chatFilter,setChatFilter]=useState('all'),[search,setSearch]=useState(''),[typing,setTyping]=useState(false),[statuses,setStatuses]=useState([]),[statusViewer,setStatusViewer]=useState(null),[showStatusAdd,setShowStatusAdd]=useState(false);
  const socketRef=useRef(null),selectedRef=useRef(null),fileRef=useRef(),statusFileRef=useRef(),privateKeyRef=useRef(null);
  const[recording,setRecording]=useState(false),[recordSeconds,setRecordSeconds]=useState(0);
  const recorderRef=useRef(null),recordChunksRef=useRef([]),recordTimerRef=useRef(null),recordStreamRef=useRef(null),recordCancelledRef=useRef(false);
  useEffect(()=>{const saved=localStorage.getItem('talkioDarkMode');if(saved==='1')document.body.classList.add('talkio-dark');else if(saved==='0')document.body.classList.remove('talkio-dark')},[]);
  useEffect(()=>{const savedLang=localStorage.getItem('talkioLang')||'en';document.documentElement.lang=savedLang;document.documentElement.dir='ltr';document.body.classList.toggle('talkio-urdu',savedLang==='ur')},[lang]);
- const[call,setCall]=useState(null),pcRef=useRef(null),localStreamRef=useRef(null),remoteVideo=useRef(),localVideo=useRef(),pendingIce=useRef([]);const[conference,setConference]=useState(null),confPeers=useRef(new Map()),confStream=useRef(null);
+ const[call,setCall]=useState(null),pcRef=useRef(null),localStreamRef=useRef(null),remoteVideo=useRef(),localVideo=useRef(),pendingIce=useRef([]);const[conference,setConference]=useState(null),[conferencePicker,setConferencePicker]=useState(false),[conferenceSelected,setConferenceSelected]=useState([]),confPeers=useRef(new Map()),confStream=useRef(null);
  useEffect(()=>()=>{clearInterval(recordTimerRef.current);try{if(recorderRef.current?.state==='recording')recorderRef.current.stop()}catch{}recordStreamRef.current?.getTracks().forEach(t=>t.stop())},[]);
  useEffect(()=>{selectedRef.current=selected},[selected]);const headers=useMemo(()=>({Authorization:`Bearer ${token}`,'Content-Type':'application/json'}),[token]);
  async function api(path,opts={}){const r=await fetch(API+path,{...opts,headers:{...headers,...opts.headers}});const data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.message||'Request failed');return data}
@@ -304,7 +304,35 @@ async function viewStatus(g){setStatusViewer(g);for(const s of g.statuses)if(Str
  async function makeCall(type,u=selected){if(!u)return;try{const stream=await getMedia(type==='video'),pc=new RTCPeerConnection(rtcCfg),callId=crypto.randomUUID();localStreamRef.current=stream;pcRef.current=pc;stream.getTracks().forEach(t=>pc.addTrack(t,stream));pc.ontrack=e=>{if(remoteVideo.current)remoteVideo.current.srcObject=e.streams[0]};pc.onicecandidate=e=>e.candidate&&socketRef.current.emit('call:ice',{to:u._id,candidate:e.candidate,callId});const offer=await pc.createOffer();await pc.setLocalDescription(offer);setCall({direction:'out',peer:u,type,callId,state:'calling'});setTimeout(()=>{if(localVideo.current)localVideo.current.srcObject=stream},50);socketRef.current.emit('call:offer',{to:u._id,offer,type,callId},ack=>{if(!ack?.ok){alert('User is offline, unavailable, or not in your contacts');cleanupCall()}})}catch(e){alert('Camera/microphone permission is required: '+e.message)}}
  function bindCallSocket(s){s.on('call:incoming',d=>setCall({direction:'in',peer:users.find(u=>String(u._id)===String(d.from))||{_id:d.from,username:d.callerName},...d,state:'ringing'}));s.on('call:answered',async d=>{if(!pcRef.current)return;await pcRef.current.setRemoteDescription(d.answer);for(const c of pendingIce.current)await pcRef.current.addIceCandidate(c);pendingIce.current=[];setCall(v=>v&&({...v,state:'connected'}))});s.on('call:ice',async({candidate})=>{if(pcRef.current?.remoteDescription)try{await pcRef.current.addIceCandidate(candidate)}catch{}else pendingIce.current.push(candidate)});s.on('call:rejected',cleanupCall);s.on('call:ended',cleanupCall);s.on('call:unavailable',cleanupCall)}
  async function answerCall(){try{const stream=await getMedia(call.type==='video'),pc=new RTCPeerConnection(rtcCfg);localStreamRef.current=stream;pcRef.current=pc;stream.getTracks().forEach(t=>pc.addTrack(t,stream));pc.ontrack=e=>{if(remoteVideo.current)remoteVideo.current.srcObject=e.streams[0]};pc.onicecandidate=e=>e.candidate&&socketRef.current.emit('call:ice',{to:call.from,candidate:e.candidate,callId:call.callId});await pc.setRemoteDescription(call.offer);const ans=await pc.createAnswer();await pc.setLocalDescription(ans);socketRef.current.emit('call:answer',{to:call.from,answer:ans,callId:call.callId});setCall(v=>({...v,state:'connected'}));setTimeout(()=>{if(localVideo.current)localVideo.current.srcObject=stream},50)}catch(e){alert(e.message);rejectCall()}}function rejectCall(){if(call?.direction==='in')socketRef.current.emit('call:reject',{to:call.from,callId:call.callId});else if(call?.peer)socketRef.current.emit('call:end',{to:call.peer._id,callId:call.callId});cleanupCall()}
- async function startConference(type='video'){const names=prompt('Enter up to 7 usernames separated by commas (8 people maximum including you):');if(!names)return;const wanted=names.split(',').map(x=>x.trim().replace(/^@/,'').toLowerCase()).filter(Boolean);if(wanted.length>7)return alert('Conference call limit is 8 people including you. You can add up to 7 other users.');const invitees=users.filter(u=>wanted.includes(String(u.username||'').toLowerCase())).slice(0,7);if(!invitees.length)return alert('No matching added users found');try{const stream=await getMedia(type==='video');confStream.current=stream;socketRef.current.emit('conference:create',{invitees:invitees.map(u=>u._id),type},ack=>{if(ack?.ok){setConference({roomId:ack.roomId,type,members:invitees.map(x=>x._id),incoming:false});socketRef.current.emit('conference:join',{roomId:ack.roomId},j=>(j?.peers||[]).forEach(id=>createConfPeer(id,true,ack.roomId,type)))}})}catch(e){alert(e.message)}}
+ function openConferencePicker(){setConferenceSelected([]);setConferencePicker(true)}
+function toggleConferenceUser(id){
+ setConferenceSelected(v=>{
+  const key=String(id);
+  if(v.includes(key))return v.filter(x=>x!==key);
+  if(v.length>=7){alert('Conference call limit is 8 people including you. You can select up to 7 other users.');return v}
+  return [...v,key];
+ })
+}
+async function startConference(type='video',invitees=[]){
+ if(!invitees.length)return alert('Select at least one user for the conference call.');
+ if(invitees.length>7)return alert('Conference call limit is 8 people including you.');
+ try{
+  setConferencePicker(false);
+  const stream=await getMedia(type==='video');
+  confStream.current=stream;
+  socketRef.current.emit('conference:create',{invitees:invitees.map(u=>u._id),type},ack=>{
+   if(ack?.ok){
+    setConference({roomId:ack.roomId,type,members:invitees.map(x=>x._id),incoming:false});
+    setConferenceSelected([]);
+    socketRef.current.emit('conference:join',{roomId:ack.roomId},j=>(j?.peers||[]).forEach(id=>createConfPeer(id,true,ack.roomId,type)))
+   }else{
+    alert(ack?.message||'Could not create conference call');
+    confStream.current?.getTracks().forEach(t=>t.stop());
+    confStream.current=null;
+   }
+  })
+ }catch(e){alert(e.message)}
+}
  function bindConferenceSocket(s){s.on('conference:incoming',d=>setConference({...d,incoming:true}));s.on('conference:peer-joined',({roomId,userId})=>createConfPeer(userId,true,roomId,conference?.type||'video'));s.on('conference:signal',async({roomId,from,data})=>handleConfSignal(roomId,from,data));s.on('conference:peer-left',({userId})=>{confPeers.current.get(userId)?.close();confPeers.current.delete(userId)})}
  async function joinConference(){try{const stream=await getMedia(conference.type==='video');confStream.current=stream;socketRef.current.emit('conference:join',{roomId:conference.roomId},ack=>{if(!ack?.ok)return;setConference(v=>({...v,incoming:false}));(ack.peers||[]).forEach(id=>createConfPeer(id,true,conference.roomId,conference.type))})}catch(e){alert(e.message)}}
  async function createConfPeer(peerId,initiator,roomId,type){if(String(peerId)===String(me?._id)||confPeers.current.has(peerId))return;const pc=new RTCPeerConnection(rtcCfg);confPeers.current.set(peerId,pc);confStream.current?.getTracks().forEach(t=>pc.addTrack(t,confStream.current));pc.onicecandidate=e=>e.candidate&&socketRef.current.emit('conference:signal',{roomId,to:peerId,data:{candidate:e.candidate}});pc.ontrack=e=>setTimeout(()=>{const el=document.getElementById('conf-'+peerId);if(el)el.srcObject=e.streams[0]},20);if(initiator){const offer=await pc.createOffer();await pc.setLocalDescription(offer);socketRef.current.emit('conference:signal',{roomId,to:peerId,data:{offer}})}}
@@ -321,7 +349,7 @@ async function viewStatus(g){setStatusViewer(g);for(const s of g.statuses)if(Str
     <button className={tab==='chats'?'active':''} onClick={()=>setTab('chats')} title={tr("Chats")}><MessageCircle/><span>{tr('Chats')}</span></button>
     <button className={tab==='calls'?'active':''} onClick={()=>setTab('calls')} title={tr("Calls")}><Phone/><span>{tr('Calls')}</span></button>
     <button className={tab==='status'?'active':''} onClick={()=>setTab('status')} title={tr("Status")}><Clock3/><span>{tr('Status')}</span></button>
-    <button onClick={()=>startConference('video')} title={tr("Conference")}><Users/><span>{tr('Conference')}</span></button>
+    <button onClick={openConferencePicker} title={tr("Conference")}><Users/><span>{tr('Conference')}</span></button>
     {me.role==='admin'&&<button onClick={()=>setTab('admin')} title={tr("Admin approvals")}><ShieldCheck/><span>{tr('Admin')}</span></button>}
    </div>
    <div className="rail-bottom settings-anchor">
@@ -331,10 +359,20 @@ async function viewStatus(g){setStatusViewer(g);for(const s of g.statuses)if(Str
     <button onClick={logout} title={tr("Log out")}><LogOut/><span>{tr('Log out')}</span></button>
    </div>
   </nav>
-  <aside className={'sidebar '+(selected?'hide-mobile':'')}><header className="chat-list-head"><h1>{tab==='chats'?tr('Chats'):tab==='status'?tr('Status'):tr('Calls')}</h1><div>{tab==='chats'&&<button onClick={()=>setChatFilter('requests')} title="Add requests"><UserPlus/></button>}<button><MoreVertical/></button></div></header><div className="search"><Search/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder={tr("Search username or phone number")}/></div>
+  <aside className={'sidebar '+(selected?'hide-mobile':'')}><header className="chat-list-head"><h1>{tab==='chats'?tr('Chats'):tab==='status'?tr('Status'):tr('Calls')}</h1><div>{tab==='chats'&&<button onClick={()=>setChatFilter('requests')} title="Add requests"><UserPlus/></button>}<button className="more-menu-trigger" onClick={()=>setMoreMenuOpen(v=>!v)} aria-label="More options" aria-expanded={moreMenuOpen}><MoreVertical/></button></div></header><div className="search"><Search/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder={tr("Search username or phone number")}/></div>
    {tab==='chats'&&<div className="chat-filters"><button className={chatFilter==='all'?'active':''} onClick={()=>setChatFilter('all')}>{tr('All')}</button><button className={chatFilter==='unread'?'active':''} onClick={()=>setChatFilter('unread')}>{tr('Unread')}</button><button className={chatFilter==='locked'?'active':''} onClick={()=>setChatFilter('locked')}><Lock/> {tr('Lock')}</button><button className={chatFilter==='requests'?'active':''} onClick={()=>setChatFilter('requests')}>{tr('Requests')} {requests.incoming.length>0&&<b className="filter-count">{requests.incoming.length}</b>}</button></div>}
-   {search.trim()&&tab==='chats'?<SearchResults results={searchResults} contacts={users} outgoing={requests.outgoing} add={requestContact}/>:tab==='status'?<StatusList me={me} groups={statuses} open={viewStatus} add={()=>setShowStatusAdd(true)}/>:tab==='calls'?<Calls users={users} call={makeCall} conference={()=>startConference('video')}/>:chatFilter==='requests'?<ContactRequests data={requests} action={requestAction}/>:<ChatList chats={chats} users={chatFilter==='locked'?lockedUsers:visibleUsers} filter={chatFilter} locked={lockedIds} open={openChat} unlock={unlockChat}/>} 
+   {search.trim()&&tab==='chats'?<SearchResults results={searchResults} contacts={users} outgoing={requests.outgoing} add={requestContact}/>:tab==='status'?<StatusList me={me} groups={statuses} open={viewStatus} add={()=>setShowStatusAdd(true)}/>:tab==='calls'?<Calls users={users} call={makeCall} conference={openConferencePicker}/>:chatFilter==='requests'?<ContactRequests data={requests} action={requestAction}/>:<ChatList chats={chats} users={chatFilter==='locked'?lockedUsers:visibleUsers} filter={chatFilter} locked={lockedIds} open={openChat} unlock={unlockChat}/>} 
   </aside>
+  {moreMenuOpen&&<MoreFeaturesMenu
+    me={me}
+    tab={tab}
+    close={()=>setMoreMenuOpen(false)}
+    go={next=>{setTab(next);setMoreMenuOpen(false)}}
+    conference={()=>{setMoreMenuOpen(false);openConferencePicker()}}
+    settings={()=>{setMoreMenuOpen(false);setSettingsOpen(true)}}
+    profile={()=>{setMoreMenuOpen(false);setSettingsPage('account')}}
+    logout={()=>{setMoreMenuOpen(false);logout()}}
+  />}
   <main className={'chat-pane '+(!selected?'empty-mobile':'')}>{!selected?<div className="wa-empty-panel"><div className="empty-center"><LockKeyhole/><h2>{tr('Private messaging')}</h2><p>{tr('New message and media contents are end-to-end encrypted. Account metadata used for search and approval is not E2EE.')}</p></div></div>:<><header className="chat-head"><button className="back" onClick={()=>setSelected(null)}><ArrowLeft/></button><Avatar user={selected}/><div className="peer"><b>{label(selected)}</b><span>{selected.phone} · {typing?tr('typing…'):selected.online?tr('online'):selected.lastSeen?tr('last seen ')+when(selected.lastSeen):tr('offline')}</span></div><div className="head-actions"><button onClick={()=>makeCall('video')}><Video/></button><button onClick={()=>makeCall('audio')}><Phone/></button>{lockedIds.has(String(selected._id))?<button onClick={()=>unlockChat(selected)} title={tr("Remove lock")}><Unlock/></button>:<button onClick={()=>lockChat(selected)} title={tr("Lock chat")}><Lock/></button>}</div></header><div className="messages">{messages.map(m=><Bubble key={m._id} m={m} mine={String(m.sender)===String(me._id)}/>)}</div><div className={'composer '+(recording?'voice-recording':'')}>
  {recording?<>
   <button className="voice-cancel" type="button" onClick={cancelVoiceRecording} title={tr('Cancel voice message')}><X/></button>
@@ -349,9 +387,47 @@ async function viewStatus(g){setStatusViewer(g);for(const s of g.statuses)if(Str
  </>}
 </div></>}</main>
   {settingsPage==='help'&&<HelpSupportPanel close={()=>setSettingsPage('')}/>} 
-  {settingsPage&&settingsPage!=='help'&&<SettingsPanel page={settingsPage} me={me} api={api} lang={lang} setLang={v=>{setLang(v);localStorage.setItem('talkioLang',v)}} close={()=>setSettingsPage('')} onMe={setMe}/>} {showStatusAdd&&<StatusAdd close={()=>setShowStatusAdd(false)} submit={addStatus} choose={()=>statusFileRef.current.click()} inputRef={statusFileRef} file={statusFile}/>} {statusViewer&&<StatusViewer group={statusViewer} me={me} api={api} close={()=>{setStatusViewer(null);loadStatuses()}} onDeleted={loadStatuses}/>}{call&&<CallOverlay call={call} answer={answerCall} end={rejectCall} remoteVideo={remoteVideo} localVideo={localVideo}/>} {conference&&<ConferenceOverlay conf={conference} users={users} join={joinConference} leave={leaveConference} stream={confStream.current}/>} 
+  {settingsPage&&settingsPage!=='help'&&<SettingsPanel page={settingsPage} me={me} api={api} lang={lang} setLang={v=>{setLang(v);localStorage.setItem('talkioLang',v)}} close={()=>setSettingsPage('')} onMe={setMe}/>} {showStatusAdd&&<StatusAdd close={()=>setShowStatusAdd(false)} submit={addStatus} choose={()=>statusFileRef.current.click()} inputRef={statusFileRef} file={statusFile}/>} {statusViewer&&<StatusViewer group={statusViewer} me={me} api={api} close={()=>{setStatusViewer(null);loadStatuses()}} onDeleted={loadStatuses}/>}{call&&<CallOverlay call={call} answer={answerCall} end={rejectCall} remoteVideo={remoteVideo} localVideo={localVideo}/>} {conferencePicker&&<ConferencePicker users={users} selected={conferenceSelected} toggle={toggleConferenceUser} close={()=>{setConferencePicker(false);setConferenceSelected([])}} start={type=>startConference(type,users.filter(u=>conferenceSelected.includes(String(u._id))))}/>} {conference&&<ConferenceOverlay conf={conference} users={users} join={joinConference} leave={leaveConference} stream={confStream.current}/>} 
  </div>
 }
+
+
+function MoreFeaturesMenu({me,tab,close,go,conference,settings,profile,logout}){
+ const item=(key,Icon,labelText,onClick,extraClass='')=>
+  <button
+   type="button"
+   className={'more-feature-item '+(tab===key?'active ':'')+extraClass}
+   onClick={onClick}
+  >
+   <span className="more-feature-icon"><Icon/></span>
+   <span className="more-feature-label">{tr(labelText)}</span>
+   <ChevronRight className="more-feature-arrow"/>
+  </button>;
+
+ return <div className="more-features-backdrop" onMouseDown={e=>e.target===e.currentTarget&&close()}>
+  <section className="more-features-menu">
+   <div className="more-features-head">
+    <div>
+     <b>More</b>
+     <small>Quick access</small>
+    </div>
+    <button type="button" className="more-features-close" onClick={close}><X/></button>
+   </div>
+
+   <div className="more-features-list">
+    {item('chats',MessageCircle,'Chats',()=>go('chats'))}
+    {item('calls',Phone,'Calls',()=>go('calls'))}
+    {item('status',Clock3,'Status',()=>go('status'))}
+    {item('',Users,'Conference',conference)}
+    {me.role==='admin'&&item('admin',ShieldCheck,'Admin approvals',()=>go('admin'),'admin-item')}
+    {item('',Settings,'Settings',settings)}
+    {item('',User,'Account',profile)}
+    {item('',LogOut,'Log out',logout,'logout-item')}
+   </div>
+  </section>
+ </div>
+}
+
 
 function Auth({mode,setMode,submit,err}){const ok=err?.startsWith('✅'),admin=mode==='admin'||mode==='admin-pin',register=mode==='register';const[show,setShow]=useState(false);const[authLang,setAuthLang]=useState(()=>localStorage.getItem('talkioLang')||'en');function changeAuthLang(){const next=authLang==='en'?'ur':'en';setAuthLang(next);localStorage.setItem('talkioLang',next);document.documentElement.lang=next;document.documentElement.dir='ltr';document.body.classList.toggle('talkio-urdu',next==='ur')}return <div className="talkio-auth"><button type="button" className="auth-language" onClick={changeAuthLang}><Globe2/> {authLang==='ur'?'اردو':'English'} <span>⌄</span></button><div className="talkio-login-card"><div className="talkio-brand"><div className={'talkio-mark '+(admin?'admin-mark':'')}><MessageCircle/></div><h1>{admin?'Talkio Admin':'Talkio'}</h1><p>{mode==='admin-pin'?tr('Secure administrator verification'):admin?tr('Administrator access'):register?tr('Create your Talkio account'):tr('Chat  •  Call  •  Connect')}</p>{!admin&&!register&&<small>{tr('Stay Close, Always')}</small>}</div><form onSubmit={submit}>{mode==='admin-pin'?<div className="talkio-field"><KeyRound/><input name="pin" type={show?'text':'password'} inputMode="numeric" placeholder={tr("6-digit security PIN")} minLength="6" maxLength="6" pattern="[0-9]{6}" required autoFocus/><button type="button" onClick={()=>setShow(v=>!v)}>{show?<EyeOff/>:<Eye/>}</button></div>:<>{register&&<div className="talkio-field"><User/><input name="username" placeholder={tr("Username")} pattern="[A-Za-z0-9_.]{3,32}" required/></div>}<div className="talkio-field"><Phone/><input name={register?'phone':'login'} type={register?'tel':'text'} placeholder={register?tr('Phone Number'):admin?tr('Admin username or phone'):tr('Phone Number or Username')} required/></div><div className="talkio-field"><LockKeyhole/><input name="password" type={show?'text':'password'} placeholder={tr("Password")} minLength="6" required/><button type="button" onClick={()=>setShow(v=>!v)}>{show?<EyeOff/>:<Eye/>}</button></div></>}{err&&<div className={ok?'success':'error'}>{err}</div>}<button className="talkio-primary">{mode==='admin-pin'?tr('Verify PIN'):admin?tr('Continue'):'register'===mode?tr('Create Account'):tr('Sign In')}</button></form>{mode==='login'&&<><div className="login-utility"><label><input type="checkbox" defaultChecked/> {tr('Remember me')}</label><button type="button" onClick={()=>alert(tr('Password reset is available from Account settings after login.'))}>{tr('Forgot Password?')}</button></div><div className="auth-divider"><span>{tr('or')}</span></div><button className="talkio-create" onClick={()=>setMode('register')}>{tr('Create Account')}</button><div className="terms-line">{tr('By signing in, you agree to our ')}<b>{tr('Terms & Privacy Policy')}</b></div><button className="admin-text-link" onClick={()=>setMode('admin')}><ShieldCheck/> {tr('Admin Login')}</button></>}{register&&<><button className="link" onClick={()=>setMode('login')}>{tr('Already have an account? Sign In')}</button><p className="approval-note">{tr('Your account opens after administrator approval.')}</p></>}{admin&&<button className="link back-user-login" onClick={()=>setMode('login')}><ArrowLeft/> {tr('Back to User Login')}</button>}<div className="talkio-footer">{tr("More Than a Chat ♥")}</div></div></div>}
 
@@ -371,13 +447,15 @@ function SettingsMenu({me,close,open,logout}){
   <button onClick={()=>open('language')}><Languages/><span>{tr('Language')}</span><ChevronRight/></button>
 
   <div
+   className="settings-dark-row"
    style={{
     display:'flex',
     alignItems:'center',
     gap:'12px',
     padding:'10px 14px',
     width:'100%',
-    boxSizing:'border-box'
+    boxSizing:'border-box',
+    position:'relative'
    }}
   >
    <Clock3/>
@@ -434,23 +512,79 @@ function SettingsMenu({me,close,open,logout}){
 }
 function HelpSupportPanel({close}){
  const [openItem,setOpenItem]=useState(null);
- const row=(id,Icon,title,body)=><div style={{borderBottom:'1px solid #e8edf2'}}>
-  <button type="button" onClick={()=>setOpenItem(openItem===id?null:id)} style={{width:'100%',border:0,background:'transparent',padding:'16px 18px',display:'flex',alignItems:'center',gap:12,textAlign:'left',cursor:'pointer'}}>
-   <Icon/><b style={{flex:1}}>{title}</b><ChevronRight style={{width:18,height:18,transform:openItem===id?'rotate(90deg)':'none'}}/>
-  </button>
-  {openItem===id&&<div style={{padding:'0 18px 18px 50px',lineHeight:1.6,color:'#53606d'}}>{body}</div>}
- </div>;
- return <div className="settings-overlay" onMouseDown={e=>e.target===e.currentTarget&&close()}>
-  <section className="settings-panel" style={{maxWidth:520}}>
-   <header><button type="button" onClick={close}><X/></button><div><b>Help & Support</b></div></header>
-   {row('faq',ShieldCheck,'Help Center / FAQs',<div>When someone creates an account, he/she will take approval from the admin.</div>)}
-   {row('contact',Phone,'Contact Support',<div><b>03445088350</b><br/>or Msg to Admin.</div>)}
-   {row('privacy',Lock,'Privacy',<div>The user's password is private.</div>)}
-   {row('about',MessageCircle,'About Talkio',<div>Talkio / Website</div>)}
+
+ const items=[
+  {
+   id:'faq',
+   Icon:ShieldCheck,
+   title:'Help Center / FAQs',
+   body:<div>When someone creates an account, he/she will take approval from the admin.</div>,
+   tone:'blue'
+  },
+  {
+   id:'contact',
+   Icon:Phone,
+   title:'Contact Support',
+   body:<div><b>03445088350</b><br/>or Msg to Admin.</div>,
+   tone:'green'
+  },
+  {
+   id:'privacy',
+   Icon:Lock,
+   title:'Privacy',
+   body:<div>The user's password is private.</div>,
+   tone:'purple'
+  },
+  {
+   id:'about',
+   Icon:MessageCircle,
+   title:'About Talkio',
+   body:<div>Talkio / Website</div>,
+   tone:'orange'
+  }
+ ];
+
+ return <div className="settings-overlay help-overlay" onMouseDown={e=>e.target===e.currentTarget&&close()}>
+  <section className="settings-panel help-panel">
+   <header className="help-header">
+    <button type="button" className="help-close" onClick={close}><X/></button>
+    <div>
+     <b>Help & Support</b>
+     <small>Everything you need in one place</small>
+    </div>
+   </header>
+
+   <div className="help-content">
+    <div className="help-hero">
+     <div className="help-hero-icon"><ShieldCheck/></div>
+     <div>
+      <h2>How can we help?</h2>
+      <p>Find answers, contact support, and review privacy information.</p>
+     </div>
+    </div>
+
+    <div className="help-list">
+     {items.map(({id,Icon,title,body,tone})=>{
+      const opened=openItem===id;
+      return <div className={'help-item help-'+tone+(opened?' open':'')} key={id}>
+       <button
+        type="button"
+        className="help-row"
+        onClick={()=>setOpenItem(opened?null:id)}
+        aria-expanded={opened}
+       >
+        <span className="help-icon"><Icon/></span>
+        <span className="help-row-text">{title}</span>
+        <ChevronRight className="help-chevron"/>
+       </button>
+       {opened&&<div className="help-answer">{body}</div>}
+      </div>
+     })}
+    </div>
+   </div>
   </section>
  </div>
 }
-
 function SettingsPanel({page,me,api,lang,setLang,close,onMe}){
  const[name,setName]=useState(me.name||'');
  const[username,setUsername]=useState(me.username||'');
@@ -702,7 +836,7 @@ function ContactRequests({data,action}){return <div className="list"><div classN
 function ChatList({chats,users,filter,locked,open,unlock}){const ids=new Set(chats.map(c=>String(c.user._id))),showChats=filter==='unread'?chats.filter(c=>c.unread>0&&!locked.has(String(c.user._id))):filter==='locked'?chats.filter(c=>locked.has(String(c.user._id))):chats.filter(c=>!locked.has(String(c.user._id)));return <div className="list">{showChats.map(c=><button className="row" key={c.user._id} onClick={()=>open(c.user)}><Avatar user={c.user}/><div className="row-main"><div><b>{label(c.user)}</b><time>{when(c.lastMessage.createdAt)}</time></div><div><span className="preview">🔒 {tr('End-to-end encrypted message')}</span>{c.unread>0&&<em>{c.unread}</em>}</div></div>{locked.has(String(c.user._id))&&<Lock className="row-lock"/>}</button>)}{filter==='all'&&users.filter(u=>!ids.has(String(u._id))).map(u=><button className="row" key={u._id} onClick={()=>open(u)}><Avatar user={u}/><div className="row-main"><b>{label(u)}</b><span className="preview">{u.phone}</span></div></button>)}{filter==='locked'&&users.filter(u=>!ids.has(String(u._id))).map(u=><div className="row" key={u._id}><Avatar user={u}/><button className="row-main plain-open" onClick={()=>open(u)}><b>{label(u)}</b><span className="preview">{tr('Locked chat')}</span></button><button className="icon-btn" onClick={()=>unlock(u)}><Unlock/></button></div>)}{filter==='unread'&&showChats.length===0&&<div className="filter-empty">{tr('No unread messages.')}</div>}{filter==='locked'&&users.length===0&&<div className="filter-empty">{tr('No locked chats.')}</div>}</div>}
 function Bubble({m,mine}){return <div className={'bubble-wrap '+(mine?'mine':'theirs')}><div className="bubble">{m.type==='image'&&m.attachment&&<img className="media" src={m.attachment} alt=""/>}{m.type==='video'&&m.attachment&&<video className="media" src={m.attachment} controls/>}{m.type==='audio'&&m.attachment&&<audio src={m.attachment} controls/>}{m.type==='file'&&m.attachment&&<a href={m.attachment} download={m.attachmentName}><FileText/> {m.attachmentName}</a>}{m.text&&<div className="msg-text">{m.text}</div>}<div className="meta"><LockKeyhole/><span>{when(m.createdAt)}</span>{mine&&(m.seen?<CheckCheck className="seen"/>:m.deliveredAt?<CheckCheck/>:<Check/>)}</div></div></div>}
 function StatusList({me,groups,open,add}){const mine=groups.find(g=>String(g.user._id)===String(me._id));return <div className="list"><button className="row" onClick={()=>mine?open(mine):add()}><div className="avatar add-avatar"><Avatar user={me} status={!!mine}/>{!mine&&<Plus/>}</div><div className="row-main"><b>{tr('My status')}</b><span className="preview">{mine?`${mine.statuses.length} ${mine.statuses.length===1?'status':'statuses'} shared`:tr('Add status for 24 hours')}</span></div></button>{groups.filter(g=>String(g.user._id)!==String(me._id)).map(g=><button className="row" key={g.user._id} onClick={()=>open(g)}><Avatar user={g.user} status/><div className="row-main"><div><b>{label(g.user)}</b>{g.unseen>0&&<em>{g.unseen}</em>}</div><span className="preview">{when(g.statuses.at(-1)?.createdAt)}</span></div></button>)}</div>}
-function Calls({users,call,conference}){return <div className="list"><button className="row special" onClick={conference}><div className="round-icon"><Users/></div><div className="row-main"><b>{tr('New conference call')}</b><span className="preview">{tr('Call added users')} · Max 8 people</span></div></button>{users.map(u=><div className="row" key={u._id}><Avatar user={u}/><div className="row-main"><b>{label(u)}</b><span className="preview">{u.online?tr('online'):tr('last seen ')+when(u.lastSeen)}</span></div><button className="icon-green" onClick={()=>call('audio',u)}><Phone/></button><button className="icon-green" onClick={()=>call('video',u)}><Video/></button></div>)}</div>}
+function Calls({users,call,conference}){return <div className="list"><button className="row special conference-call-row" onClick={conference}><div className="round-icon conference-multicolor-icon"><Users/></div><div className="row-main"><b>{tr('Conference call')}</b></div></button>{users.map(u=><div className="row" key={u._id}><Avatar user={u}/><div className="row-main"><b>{label(u)}</b><span className="preview">{u.online?tr('online'):tr('last seen ')+when(u.lastSeen)}</span></div><button className="icon-green" onClick={()=>call('audio',u)}><Phone/></button><button className="icon-green" onClick={()=>call('video',u)}><Video/></button></div>)}</div>}
 function StatusAdd({close,submit,choose,inputRef,file}){const[t,setT]=useState('');return <div className="modal"><div className="status-add"><button className="close" onClick={close}><X/></button><h2>{tr('Add status')}</h2><textarea value={t} onChange={e=>setT(e.target.value)} placeholder={tr("Type a status…")}/><button className="primary" onClick={()=>t.trim()&&submit({type:'text',text:t,background:'#0b846d'})}>{tr('Share text status')}</button><input ref={inputRef} type="file" accept="image/*,video/*" hidden onChange={file}/><button className="secondary" onClick={choose}><Camera/> {tr('Add photo or video')}</button><small>{tr('Videos are automatically converted for browser playback · Maximum 60 seconds.')}</small><small>{tr('Status disappears automatically after 24 hours.')}</small></div></div>}
 function StatusViewer({group,me,api,close,onDeleted}){
  const[i,setI]=useState(0);
@@ -796,4 +930,54 @@ function StatusViewer({group,me,api,close,onDeleted}){
  </div>
 }
 function CallOverlay({call,answer,end,remoteVideo,localVideo}){return <div className="call-overlay"><div className="call-name"><Avatar user={call.peer||{username:call.callerName}} size={80}/><h2>{label(call.peer)||call.callerName}</h2><p>{call.state==='ringing'?tr('Incoming ')+(call.type==='video'?'ویڈیو':'آڈیو')+tr(' call'):call.state==='calling'?tr('Calling…'):tr('Connected · WebRTC encrypted')}</p></div>{call.type==='video'&&<><video ref={remoteVideo} className="remote" autoPlay playsInline/><video ref={localVideo} className="local" autoPlay playsInline muted/></>}<div className="call-actions">{call.direction==='in'&&call.state==='ringing'&&<button className="accept" onClick={answer}><Phone/></button>}<button className="hang" onClick={end}><PhoneOff/></button></div></div>}
+function ConferencePicker({users,selected,toggle,close,start}){
+ const [q,setQ]=useState('');
+ const shown=users.filter(u=>{
+  const s=(label(u)+' '+(u.phone||'')).toLowerCase();
+  return s.includes(q.trim().toLowerCase());
+ });
+ return <div className="conference-picker-overlay" onMouseDown={e=>e.target===e.currentTarget&&close()}>
+  <section className="conference-picker">
+   <header>
+    <button className="conference-picker-close" onClick={close}><X/></button>
+    <div>
+     <b>Conference Call</b>
+     <span>Select up to 7 users · {selected.length}/7 selected</span>
+    </div>
+   </header>
+
+   <div className="conference-picker-search">
+    <Search/>
+    <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search users"/>
+   </div>
+
+   <div className="conference-picker-list">
+    {shown.length===0
+     ?<div className="conference-picker-empty">No users found.</div>
+     :shown.map(u=>{
+      const id=String(u._id),checked=selected.includes(id);
+      return <button
+       key={u._id}
+       type="button"
+       className={'conference-user '+(checked?'selected':'')}
+       onClick={()=>toggle(id)}
+      >
+       <Avatar user={u} size={44}/>
+       <div className="conference-user-info">
+        <b>{label(u)}</b>
+        <span>{u.online?tr('online'):(u.phone||tr('offline'))}</span>
+       </div>
+       <span className="conference-check">{checked?<Check/>:null}</span>
+      </button>
+     })}
+   </div>
+
+   <footer>
+    <button className="conference-start audio" disabled={!selected.length} onClick={()=>start('audio')}><Phone/> Audio</button>
+    <button className="conference-start video" disabled={!selected.length} onClick={()=>start('video')}><Video/> Video</button>
+   </footer>
+  </section>
+ </div>
+}
+
 function ConferenceOverlay({conf,users,join,leave,stream}){useEffect(()=>{const v=document.getElementById('conf-self');if(v&&stream)v.srcObject=stream},[stream,conf.incoming]);const members=(conf.members||[]).map(id=>users.find(u=>String(u._id)===String(id))).filter(Boolean);return <div className="conference"><header><Users/><b>{tr('Conference call')}</b><span>{conf.type}</span></header>{conf.incoming?<div className="incoming-conf"><h2>{tr('Incoming conference call')}</h2><div><button className="accept" onClick={join}><Phone/></button><button className="hang" onClick={leave}><PhoneOff/></button></div></div>:<div className="conf-grid"><div className="conf-tile"><video id="conf-self" autoPlay playsInline muted/><span>{tr('You')}</span></div>{members.map(u=><div className="conf-tile" key={u._id}><video id={'conf-'+u._id} autoPlay playsInline/><span>{label(u)}</span></div>)}</div>}<button className="hang floating" onClick={leave}><PhoneOff/></button></div>}
