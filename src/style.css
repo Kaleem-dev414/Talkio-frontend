@@ -774,3 +774,201 @@ img,video{max-width:100%}
     scroll-behavior:auto!important;
   }
 }
+
+
+/* ===== Talkio sticky named navigation sidebar ===== */
+@media(min-width:761px){
+  .wa-desktop{min-height:100dvh;align-items:stretch}
+  .wa-rail{
+    position:sticky!important;top:0!important;align-self:flex-start!important;
+    height:100dvh!important;width:152px!important;min-width:152px!important;flex:0 0 152px!important;
+    padding:12px 10px 10px!important;background:#fff!important;border-right:1px solid #e4e9ed!important;
+    display:flex!important;flex-direction:column!important;justify-content:flex-start!important;align-items:stretch!important;
+    overflow:visible!important;z-index:30!important
+  }
+  .rail-top,.rail-bottom{width:100%!important;display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:6px!important}
+  .rail-bottom{margin-top:auto!important;padding-top:12px!important}
+  .wa-rail button{
+    width:100%!important;height:46px!important;min-height:46px!important;border:0!important;border-radius:12px!important;
+    background:transparent!important;color:#52677a!important;display:flex!important;align-items:center!important;
+    justify-content:flex-start!important;gap:12px!important;padding:0 12px!important;text-align:left!important;
+    white-space:nowrap!important;overflow:hidden!important
+  }
+  .wa-rail button svg{width:21px!important;height:21px!important;min-width:21px!important;flex:0 0 21px!important}
+  .wa-rail button>span{display:block!important;min-width:0!important;overflow:hidden!important;text-overflow:ellipsis!important;font-size:14px!important;line-height:1!important;font-weight:650!important}
+  .wa-rail button:hover{background:#f0f7ff!important;color:#1687f6!important;transform:none!important}
+  .wa-rail button.active{background:linear-gradient(145deg,#e9f3ff,#dceeff)!important;color:#1687f6!important;box-shadow:inset 0 0 0 1px #cee4fb!important}
+  .wa-rail .profile-button{overflow:hidden!important}
+  .wa-rail .profile-button .avatar{width:30px!important;height:30px!important;min-width:30px!important;flex:0 0 30px!important;font-size:10px!important}
+  .settings-menu{left:150px!important;bottom:62px!important}
+}
+@media(min-width:761px) and (max-width:1024px){
+  .wa-rail{width:138px!important;min-width:138px!important;flex-basis:138px!important;padding-left:8px!important;padding-right:8px!important}
+  .wa-rail button{padding:0 10px!important;gap:10px!important}
+  .wa-rail button>span{font-size:13px!important}
+  .settings-menu{left:136px!important}
+}
+@media(max-width:760px){.wa-rail{display:none!important}}
+
+/* ===== Talkio mobile bottom navigation: all options visible ===== */
+@media(max-width:760px){
+  :root{--talkio-mobile-nav-h:112px}
+
+  .wa-desktop{
+    min-height:100dvh!important;
+    height:100dvh!important;
+    overflow:hidden!important;
+    padding-bottom:var(--talkio-mobile-nav-h)!important;
+  }
+
+  .wa-rail{
+    position:fixed!important;
+    left:0!important;
+    right:0!important;
+    bottom:0!important;
+    top:auto!important;
+    width:100%!important;
+    min-width:0!important;
+    height:var(--talkio-mobile-nav-h)!important;
+    padding:6px max(6px,env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(6px,env(safe-area-inset-left))!important;
+    background:rgba(255,255,255,.98)!important;
+    border-right:0!important;
+    border-top:1px solid #dfe5ea!important;
+    box-shadow:0 -8px 24px rgba(22,39,55,.08)!important;
+    z-index:120!important;
+    display:grid!important;
+    grid-template-columns:repeat(4,minmax(0,1fr))!important;
+    grid-auto-rows:1fr!important;
+    gap:4px 6px!important;
+    align-items:stretch!important;
+    justify-content:stretch!important;
+    overflow:visible!important;
+  }
+
+  .wa-rail .rail-top,
+  .wa-rail .rail-bottom{
+    display:contents!important;
+  }
+
+  .wa-rail button{
+    width:100%!important;
+    min-width:0!important;
+    height:48px!important;
+    min-height:48px!important;
+    padding:3px 2px!important;
+    margin:0!important;
+    border:0!important;
+    border-radius:11px!important;
+    background:transparent!important;
+    color:#60758a!important;
+    display:flex!important;
+    flex-direction:column!important;
+    align-items:center!important;
+    justify-content:center!important;
+    gap:2px!important;
+    line-height:1!important;
+    overflow:hidden!important;
+  }
+
+  .wa-rail button:hover,
+  .wa-rail button:active{
+    background:#f2f7fb!important;
+  }
+
+  .wa-rail button.active{
+    background:#e7f2ff!important;
+    color:#1687f6!important;
+    box-shadow:inset 0 0 0 1px #d4e8fb!important;
+  }
+
+  .wa-rail button svg{
+    width:19px!important;
+    height:19px!important;
+    min-width:19px!important;
+    flex:0 0 19px!important;
+  }
+
+  .wa-rail button>span{
+    display:block!important;
+    width:100%!important;
+    min-width:0!important;
+    max-width:100%!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+    white-space:nowrap!important;
+    text-align:center!important;
+    font-size:10px!important;
+    font-weight:650!important;
+    line-height:12px!important;
+  }
+
+  .wa-rail .profile-button .avatar{
+    width:21px!important;
+    height:21px!important;
+    min-width:21px!important;
+    flex:0 0 21px!important;
+    font-size:7px!important;
+  }
+
+  .wa-desktop .sidebar{
+    width:100%!important;
+    min-width:0!important;
+    height:calc(100dvh - var(--talkio-mobile-nav-h))!important;
+    max-height:calc(100dvh - var(--talkio-mobile-nav-h))!important;
+    overflow:hidden!important;
+  }
+
+  .chat-pane{
+    bottom:var(--talkio-mobile-nav-h)!important;
+    height:auto!important;
+    min-height:0!important;
+  }
+
+  .chat-pane .messages{
+    min-height:0!important;
+    overscroll-behavior:contain!important;
+    -webkit-overflow-scrolling:touch!important;
+  }
+
+  .wa-desktop .composer{
+    padding-bottom:max(8px,env(safe-area-inset-bottom))!important;
+  }
+
+  .settings-menu{
+    position:fixed!important;
+    left:8px!important;
+    right:8px!important;
+    bottom:calc(var(--talkio-mobile-nav-h) + 8px)!important;
+    width:auto!important;
+    max-width:none!important;
+    z-index:140!important;
+  }
+}
+
+@media(max-width:380px){
+  :root{--talkio-mobile-nav-h:108px}
+  .wa-rail{gap:3px!important;padding-left:4px!important;padding-right:4px!important}
+  .wa-rail button{height:46px!important;min-height:46px!important;border-radius:9px!important}
+  .wa-rail button svg{width:18px!important;height:18px!important;min-width:18px!important}
+  .wa-rail button>span{font-size:9px!important;line-height:11px!important}
+  .wa-rail .profile-button .avatar{width:20px!important;height:20px!important;min-width:20px!important}
+}
+
+@media(max-width:320px){
+  :root{--talkio-mobile-nav-h:104px}
+  .wa-rail button{height:44px!important;min-height:44px!important}
+  .wa-rail button>span{font-size:8px!important}
+}
+
+@media(max-height:500px) and (orientation:landscape) and (max-width:760px){
+  :root{--talkio-mobile-nav-h:58px}
+  .wa-rail{
+    grid-template-columns:repeat(8,minmax(0,1fr))!important;
+    grid-template-rows:1fr!important;
+    height:var(--talkio-mobile-nav-h)!important;
+    padding-top:3px!important;
+    padding-bottom:calc(3px + env(safe-area-inset-bottom))!important;
+  }
+  .wa-rail button{height:48px!important;min-height:48px!important}
+  .wa-rail button>span{font-size:8px!important}
+}

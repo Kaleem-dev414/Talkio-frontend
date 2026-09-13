@@ -316,7 +316,21 @@ async function viewStatus(g){setStatusViewer(g);for(const s of g.statuses)if(Str
   </div>;
  const visibleUsers=users.filter(u=>!lockedIds.has(String(u._id))),lockedUsers=users.filter(u=>lockedIds.has(String(u._id)));
  return <div className="app-shell wa-desktop">
-  <nav className="wa-rail"><div className="rail-top"><button className={tab==='chats'?'active':''} onClick={()=>setTab('chats')} title={tr("Chats")}><MessageCircle/></button><button className={tab==='calls'?'active':''} onClick={()=>setTab('calls')} title={tr("Calls")}><Phone/></button><button className={tab==='status'?'active':''} onClick={()=>setTab('status')} title={tr("Status")}><Clock3/></button><button onClick={()=>startConference('video')} title={tr("Conference")}><Users/></button>{me.role==='admin'&&<button onClick={()=>setTab('admin')} title={tr("Admin approvals")}><ShieldCheck/></button>}</div><div className="rail-bottom settings-anchor"><button title={tr("Settings")} onClick={()=>setSettingsOpen(v=>!v)}><Settings/></button>{settingsOpen&&<SettingsMenu me={me} close={()=>setSettingsOpen(false)} open={p=>{setSettingsPage(p);setSettingsOpen(false)}} logout={logout}/>}<button className="profile-button" onClick={()=>{setSettingsPage('account');setSettingsOpen(false)}} title="Profile"><Avatar user={me} size={30}/></button><button onClick={logout} title={tr("Log out")}><LogOut/></button></div></nav>
+  <nav className="wa-rail">
+   <div className="rail-top">
+    <button className={tab==='chats'?'active':''} onClick={()=>setTab('chats')} title={tr("Chats")}><MessageCircle/><span>{tr('Chats')}</span></button>
+    <button className={tab==='calls'?'active':''} onClick={()=>setTab('calls')} title={tr("Calls")}><Phone/><span>{tr('Calls')}</span></button>
+    <button className={tab==='status'?'active':''} onClick={()=>setTab('status')} title={tr("Status")}><Clock3/><span>{tr('Status')}</span></button>
+    <button onClick={()=>startConference('video')} title={tr("Conference")}><Users/><span>{tr('Conference')}</span></button>
+    {me.role==='admin'&&<button onClick={()=>setTab('admin')} title={tr("Admin approvals")}><ShieldCheck/><span>{tr('Admin')}</span></button>}
+   </div>
+   <div className="rail-bottom settings-anchor">
+    <button title={tr("Settings")} onClick={()=>setSettingsOpen(v=>!v)}><Settings/><span>{tr('Settings')}</span></button>
+    {settingsOpen&&<SettingsMenu me={me} close={()=>setSettingsOpen(false)} open={p=>{setSettingsPage(p);setSettingsOpen(false)}} logout={logout}/>} 
+    <button className="profile-button" onClick={()=>{setSettingsPage('account');setSettingsOpen(false)}} title="Profile"><Avatar user={me} size={30}/><span>{me.username||tr('Profile')}</span></button>
+    <button onClick={logout} title={tr("Log out")}><LogOut/><span>{tr('Log out')}</span></button>
+   </div>
+  </nav>
   <aside className={'sidebar '+(selected?'hide-mobile':'')}><header className="chat-list-head"><h1>{tab==='chats'?tr('Chats'):tab==='status'?tr('Status'):tr('Calls')}</h1><div>{tab==='chats'&&<button onClick={()=>setChatFilter('requests')} title="Add requests"><UserPlus/></button>}<button><MoreVertical/></button></div></header><div className="search"><Search/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder={tr("Search username or phone number")}/></div>
    {tab==='chats'&&<div className="chat-filters"><button className={chatFilter==='all'?'active':''} onClick={()=>setChatFilter('all')}>{tr('All')}</button><button className={chatFilter==='unread'?'active':''} onClick={()=>setChatFilter('unread')}>{tr('Unread')}</button><button className={chatFilter==='locked'?'active':''} onClick={()=>setChatFilter('locked')}><Lock/> {tr('Lock')}</button><button className={chatFilter==='requests'?'active':''} onClick={()=>setChatFilter('requests')}>{tr('Requests')} {requests.incoming.length>0&&<b className="filter-count">{requests.incoming.length}</b>}</button></div>}
    {search.trim()&&tab==='chats'?<SearchResults results={searchResults} contacts={users} outgoing={requests.outgoing} add={requestContact}/>:tab==='status'?<StatusList me={me} groups={statuses} open={viewStatus} add={()=>setShowStatusAdd(true)}/>:tab==='calls'?<Calls users={users} call={makeCall} conference={()=>startConference('video')}/>:chatFilter==='requests'?<ContactRequests data={requests} action={requestAction}/>:<ChatList chats={chats} users={chatFilter==='locked'?lockedUsers:visibleUsers} filter={chatFilter} locked={lockedIds} open={openChat} unlock={unlockChat}/>} 
