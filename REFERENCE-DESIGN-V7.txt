@@ -1,0 +1,21 @@
+TALKIO V7 — Reference-picture UI
+
+Included:
+- Dark navy/blue professional Talkio login page
+- Talkio logo and favicon
+- Phone/username + password sign in
+- Remember me, Forgot Password, Create Account
+- Chats list with All / Unread / Lock / Requests
+- Search users and add contacts
+- Voice/video calling and status features retained
+- Settings gear dropdown
+- Account -> Change Name + Reset Password
+- Language -> English + Urdu
+- Dark Mode + Help & Support menu entries
+- Logout
+- Admin account retains private Approve/Reject dashboard
+- Responsive desktop/mobile styling
+
+Run:
+1. npm install
+2. npm run dev

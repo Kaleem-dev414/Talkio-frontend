@@ -1,0 +1,15 @@
+TALKIO VOICE MESSAGE SETUP
+
+Voice messages are now built into the chat composer.
+
+How it works:
+- When the text box is empty, tap the microphone button to start recording.
+- The browser asks for microphone permission the first time.
+- During recording, Talkio shows a red recording indicator and timer.
+- Tap X to cancel.
+- Tap the red stop button to stop and immediately send the encrypted voice message.
+- Maximum recording length: 2 minutes.
+- Voice messages use MediaRecorder with Opus/WebM when supported.
+- The voice attachment is included inside Talkio's existing encrypted message payload.
+
+No extra backend route is required because the existing encrypted message system already supports type "audio".

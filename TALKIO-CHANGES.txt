@@ -1,0 +1,14 @@
+TALKIO UI UPDATE
+================
+- App name changed to Talkio.
+- New professional dark-blue Talkio login/register/admin login design.
+- Talkio SVG favicon added.
+- Settings gear now opens Account and Language.
+- Account includes Change Name and Reset Password.
+- Language includes English and Urdu selector.
+- Existing All, Unread, Lock, Requests, search, messaging, status, calls and video calls kept.
+- Admin approval remains inside the admin account.
+
+Run:
+  npm install
+  npm run dev

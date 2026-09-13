@@ -1,0 +1,18 @@
+TALKIO FINAL SETUP
+
+BACKEND
+1. Open PowerShell in backend.
+2. Run: npm install
+3. Check backend/.env
+4. Run: npm run dev
+
+FRONTEND
+1. Open another PowerShell in frontend.
+2. Run: npm install
+3. Run: npm run dev
+
+IMPORTANT
+- Do not copy node_modules between computers or operating systems.
+- Old unsupported video statuses cannot be repaired automatically. Delete and upload them again.
+- New status videos are sent directly to the backend and converted to MP4 H.264/AAC, maximum 60 seconds.
+- ffmpeg-static is included as a backend dependency; global Windows FFmpeg is optional.

@@ -1,0 +1,13 @@
+KHAN CHAT FRONTEND - PHONE NUMBER ACCOUNTS
+
+Users now create and log in with:
+- Phone number
+- Password
+
+There is no user-name field on registration/login.
+New accounts require admin approval before login.
+Admin can delete users from the private Admin Users page.
+
+Run:
+npm install
+npm run dev

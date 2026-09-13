@@ -1,0 +1,27 @@
+TALKIO FINAL AUDIT / FIXES
+
+Frontend
+- Fixed Socket.IO lifecycle so it waits for authenticated user bootstrap before opening WebSocket.
+  This removes the common "WebSocket is closed before the connection is established" reload warning.
+- Kept exact 6-digit Admin PIN validation before the request is sent.
+- Status videos are uploaded directly to the backend instead of decoded/truncated in the browser.
+- Old unsupported video statuses no longer spam MediaError in the console; a clean re-upload message is shown.
+- Preserved status delete, own-status viewer, 24-hour statuses, 60-second video handling, calls, conference max 8,
+  account settings, profile photo, username changes, admin approval, Help & Support, Urdu/English and dark mode.
+- Added final visual polish, focus states, responsive status media sizing and fallback UI.
+- Pinned frontend package versions instead of using "latest".
+
+Backend
+- Added ffmpeg-static dependency for portable FFmpeg video conversion.
+- Global FFmpeg remains an optional fallback.
+- Status video route converts uploads to MP4/H.264/AAC, first 60 seconds, browser-friendly 720p.
+- Converted video size is bounded to remain below MongoDB's document-size limit.
+- Preserved status create/view/delete routes and admin/user/auth/chat/call features.
+- Updated health endpoint branding to Talkio.
+- Added professional README, .gitignore and corrected .env.example.
+
+Packaging
+- node_modules and dist are intentionally excluded from the final ZIP files.
+- Run npm install after extracting each project.
+- Backend package-lock.json is omitted because a new required native media dependency was added; npm install will
+  generate a correct lockfile for the user's operating system.

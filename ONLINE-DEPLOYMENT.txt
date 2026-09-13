@@ -1,0 +1,16 @@
+TALKIO ONLINE DEPLOYMENT
+
+Frontend (Vercel): https://talkio-frontend-bay.vercel.app
+Backend (Render): https://talkio-backend-bi1q.onrender.com
+API base: https://talkio-backend-bi1q.onrender.com/api
+
+Vercel env:
+VITE_API_URL=https://talkio-backend-bi1q.onrender.com/api
+
+Vercel settings:
+Framework Preset: Vite
+Build Command: npm run build
+Output Directory: dist
+Install Command: npm install
+
+The production API URL is also present in .env.production and as the App.jsx fallback.

@@ -1,0 +1,27 @@
+TALKIO PROFESSIONAL RESPONSIVE UI
+
+The main Talkio interface has been redesigned to look cleaner and more professional.
+
+Responsive ranges included:
+- Very small phones: 280px+
+- Small phones: up to 340px
+- Standard phones: up to 420px
+- Large phones: up to 760px
+- Tablets / small laptops: 761px to 1024px
+- Desktop / laptop: 1025px+
+- Ultra-wide screens: 1500px+
+- Landscape phones with short screen height
+
+Improvements:
+- Professional left navigation rail
+- Better chat sidebar proportions
+- Modern search field
+- Refined chat filter buttons
+- Improved chat/user rows
+- Premium empty/private messaging panel
+- Better active chat header and composer
+- Responsive spacing, sizing, typography and touch targets
+- Horizontal scrolling filters on narrow phones
+- Better accessibility and reduced-motion support
+
+All existing Talkio functions are preserved.

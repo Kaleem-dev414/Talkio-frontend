@@ -1,0 +1,25 @@
+TALKIO STATUS VIDEO FIX
+
+This build fixes the persistent /api/statuses/video HTTP 500 problem caused by
+FFmpeg conversion failures on some portrait/mobile videos.
+
+Main fix:
+- output dimensions are forced to even numbers before H.264 encoding
+- MP4 H.264 + AAC output
+- maximum 60 seconds
+- 720p bounding box
+- safer timestamps and stream mapping
+- clearer backend diagnostics
+- ffmpeg-static remains bundled through npm
+
+INSTALL
+Backend:
+  npm install
+  npm run dev
+
+Frontend:
+  npm install
+  npm run dev
+
+IMPORTANT:
+Delete old unsupported video statuses and upload them again.

@@ -1,0 +1,5 @@
+Talkio call layout update
+
+1. Caller avatar, username and connection text are centered.
+2. Local/self camera preview is at the top-right.
+3. Mobile keeps the self preview at the top-right at a smaller size.

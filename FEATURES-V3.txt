@@ -1,0 +1,17 @@
+KHAN CHAT V3 FRONTEND
+
+Added:
+- Username + phone + password registration
+- Admin approval gate
+- User login by username/phone
+- Admin password + second PIN page
+- Search approved users
+- Add/contact requests with accept/reject
+- All, Unread, Lock, Requests filters
+- PIN / pattern / password chat lock
+- End-to-end encrypted new messages and attachments using Web Crypto
+- Voice calls, video calls and conference calls
+- 24-hour statuses
+
+SECURITY NOTE
+Message/media contents are E2EE for newly encrypted messages. Searchable account metadata such as username and phone number cannot be E2EE because the server needs it to find accounts, approve them and route connections. WebRTC encrypts call media in transit.

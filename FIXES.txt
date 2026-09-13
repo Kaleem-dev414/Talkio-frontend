@@ -1,0 +1,15 @@
+Khan Chat frontend fixes
+
+- Separate Admin Login option is present.
+- Admin login uses phone + password against /api/auth/login.
+- App bootstrap no longer logs the user out just because statuses/chats/users has one temporary server error.
+- Status/chats/users load independently after /api/me validates the session.
+
+Run:
+  Remove any copied node_modules folder first if this project came from another PC/OS.
+  npm install
+  npm run dev
+
+Admin login:
+  Phone: 03445088350
+  Password: Kaleem
