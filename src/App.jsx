@@ -3,7 +3,7 @@
     import{MessageCircle,Phone,Video,Users,Search,MoreVertical,Paperclip,Send,Smile,Camera,Mic,Square,Plus,ArrowLeft,CheckCheck,Check,LogOut,X,PhoneOff,FileText,Clock3,MessageSquarePlus,UserPlus,Settings,Archive,Volume2,Images,Store,LockKeyhole,ShieldCheck,UserCheck,UserX,RefreshCw,Trash2,Lock,Unlock,Inbox,KeyRound,User,Languages,ChevronRight,Eye,EyeOff,Globe2}from'lucide-react';
     import'./style.css';
 
-    const RAW=import.meta.env.VITE_API_URL||'https://talkio-backend-bi1q.onrender.com/api';
+    const RAW=import.meta.env.VITE_API_URL||(import.meta.env.DEV?'http://localhost:5000/api':'https://talkio-backend-bi1q.onrender.com/api');
     const API=RAW.replace(/\/+$/,'').endsWith('/api')?RAW.replace(/\/+$/,''):RAW.replace(/\/+$/,'')+'/api';
     const ROOT=API.replace(/\/api$/,'');
     const TK='khanChatToken',PK='khanChatPrivateJwk';
@@ -88,6 +88,37 @@
     async function encryptPayload(payload,senderPub,receiverPub){const aes=await crypto.subtle.generateKey({name:'AES-GCM',length:256},true,['encrypt','decrypt']),iv=crypto.getRandomValues(new Uint8Array(12)),ciphertext=await crypto.subtle.encrypt({name:'AES-GCM',iv},aes,enc.encode(JSON.stringify(payload))),raw=await crypto.subtle.exportKey('raw',aes),sp=await importPublic(senderPub),rp=await importPublic(receiverPub);const[senderKey,receiverKey]=await Promise.all([crypto.subtle.encrypt({name:'RSA-OAEP'},sp,raw),crypto.subtle.encrypt({name:'RSA-OAEP'},rp,raw)]);return{ciphertext:b64(ciphertext),iv:b64(iv),senderKey:b64(senderKey),receiverKey:b64(receiverKey)}}
     async function decryptMessage(m,me,privateKey){if(!m.encrypted||!m.ciphertext)return{...m,text:m.text||'',attachment:m.attachment||'',attachmentName:m.attachmentName||''};try{const mine=String(m.sender)===String(me._id),wrapped=mine?m.senderKey:m.receiverKey,raw=await crypto.subtle.decrypt({name:'RSA-OAEP'},privateKey,unb64(wrapped)),aes=await crypto.subtle.importKey('raw',raw,{name:'AES-GCM'},false,['decrypt']),plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:new Uint8Array(unb64(m.iv))},aes,unb64(m.ciphertext)),p=JSON.parse(dec.decode(plain));return{...m,...p}}catch{return{...m,text:'🔒 Unable to decrypt this message',attachment:'',attachmentName:''}}}
 
+    function getTalkioAudioConstraints(){
+     const supported=navigator.mediaDevices?.getSupportedConstraints?.()||{};
+     const audio={
+      echoCancellation:{ideal:true},
+      noiseSuppression:{ideal:true},
+      // AGC can make room/fan/background voices louder, so keep it off.
+      autoGainControl:{ideal:false},
+      channelCount:{ideal:1},
+      sampleRate:{ideal:48000},
+      sampleSize:{ideal:16},
+      latency:{ideal:0.01}
+     };
+     // Use browser/device voice-isolation processing when it is exposed.
+     if(supported.voiceIsolation)audio.voiceIsolation={ideal:true};
+     return audio;
+    }
+    function tuneTalkioMic(stream){
+     try{
+      const track=stream?.getAudioTracks?.()[0];
+      if(!track)return;
+      if('contentHint' in track)track.contentHint='speech';
+      const supported=navigator.mediaDevices?.getSupportedConstraints?.()||{};
+      const advanced={};
+      if(supported.echoCancellation)advanced.echoCancellation=true;
+      if(supported.noiseSuppression)advanced.noiseSuppression=true;
+      if(supported.autoGainControl)advanced.autoGainControl=false;
+      if(supported.voiceIsolation)advanced.voiceIsolation=true;
+      if(Object.keys(advanced).length)track.applyConstraints(advanced).catch(()=>{});
+     }catch{}
+    }
+
     export default function App(){
      const[token,setToken]=useState(localStorage.getItem(TK)||'');const[me,setMe]=useState(null);const[authMode,setAuthMode]=useState('login');const[err,setErr]=useState('');const[adminTemp,setAdminTemp]=useState('');const[adminBundle,setAdminBundle]=useState(null);
      const[settingsOpen,setSettingsOpen]=useState(false),[moreMenuOpen,setMoreMenuOpen]=useState(false),[settingsPage,setSettingsPage]=useState(''),[lang,setLang]=useState(localStorage.getItem('talkioLang')||'en'),[users,setUsers]=useState([]),[searchResults,setSearchResults]=useState([]),[requests,setRequests]=useState({incoming:[],outgoing:[]}),[locks,setLocks]=useState([]),[chats,setChats]=useState([]),[selected,setSelected]=useState(null),[messages,setMessages]=useState([]),[text,setText]=useState(''),[tab,setTab]=useState('chats'),[chatFilter,setChatFilter]=useState('all'),[search,setSearch]=useState(''),[typing,setTyping]=useState(false),[statuses,setStatuses]=useState([]),[statusViewer,setStatusViewer]=useState(null),[showStatusAdd,setShowStatusAdd]=useState(false);
@@ -96,7 +127,7 @@
      const recorderRef=useRef(null),recordChunksRef=useRef([]),recordTimerRef=useRef(null),recordStreamRef=useRef(null),recordCancelledRef=useRef(false);
      useEffect(()=>{const saved=localStorage.getItem('talkioDarkMode');if(saved==='1')document.body.classList.add('talkio-dark');else if(saved==='0')document.body.classList.remove('talkio-dark')},[]);
      useEffect(()=>{const savedLang=localStorage.getItem('talkioLang')||'en';document.documentElement.lang=savedLang;document.documentElement.dir='ltr';document.body.classList.toggle('talkio-urdu',savedLang==='ur')},[lang]);
-     const[call,setCall]=useState(null),[audioOutput,setAudioOutput]=useState('phone'),pcRef=useRef(null),localStreamRef=useRef(null),remoteVideo=useRef(),localVideo=useRef(),pendingIce=useRef([]);const[conference,setConference]=useState(null),[conferencePicker,setConferencePicker]=useState(false),[conferenceSelected,setConferenceSelected]=useState([]),confPeers=useRef(new Map()),confStream=useRef(null);
+     const[call,setCall]=useState(null),[audioOutput,setAudioOutput]=useState('phone'),pcRef=useRef(null),localStreamRef=useRef(null),remoteVideo=useRef(),localVideo=useRef(),remoteCallStreamRef=useRef(null),remoteTrackIdsRef=useRef(new Set()),remoteVoiceCtxRef=useRef(null),remoteVoiceTimerRef=useRef(null),remoteVoiceAnalyserRef=useRef(null),remoteVoiceReleaseRef=useRef(null),pendingIce=useRef([]),activeCallIdRef=useRef(null),answeringRef=useRef(false);const[conference,setConference]=useState(null),[conferencePicker,setConferencePicker]=useState(false),[conferenceSelected,setConferenceSelected]=useState([]),confPeers=useRef(new Map()),confStream=useRef(null);
      useEffect(()=>()=>{clearInterval(recordTimerRef.current);try{if(recorderRef.current?.state==='recording')recorderRef.current.stop()}catch{}recordStreamRef.current?.getTracks().forEach(t=>t.stop())},[]);
      useEffect(()=>{selectedRef.current=selected},[selected]);const headers=useMemo(()=>({Authorization:`Bearer ${token}`,'Content-Type':'application/json'}),[token]);
      async function api(path,opts={}){const r=await fetch(API+path,{...opts,headers:{...headers,...opts.headers}});const data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.message||'Request failed');return data}
@@ -104,7 +135,7 @@
      async function loadCore(m=me){const[u,c,s,r,l]=await Promise.allSettled([api('/contacts'),api('/chats'),api('/statuses'),api('/contacts/requests'),api('/locks')]);setUsers(u.status==='fulfilled'?u.value:[]);setChats(c.status==='fulfilled'?c.value:[]);setStatuses(s.status==='fulfilled'?s.value:[]);setRequests(r.status==='fulfilled'?r.value:{incoming:[],outgoing:[]});setLocks(l.status==='fulfilled'?l.value:[])}
      async function bootstrap(){try{const m=await api('/me');{const jwk=sessionStorage.getItem(PK);if(!jwk)throw new Error('Secure key unavailable');privateKeyRef.current=await importPrivate(JSON.parse(jwk))}setMe(m);await loadCore(m)}catch{logout()}}
      useEffect(()=>{if(token)bootstrap()},[token]);
-     useEffect(()=>{if(!token||!me?._id)return;const s=io(ROOT,{auth:{token},transports:['websocket','polling']});socketRef.current=s;s.on('message:new',async m=>{if(String(m.sender)===String(selectedRef.current?._id)&&me){const d=await decryptMessage(m,me,privateKeyRef.current);setMessages(v=>[...v,d]);s.emit('messages:delivered',{messageIds:[m._id]})}refreshChats()});s.on('message:sent',async m=>{if(me){const d=await decryptMessage(m,me,privateKeyRef.current);setMessages(v=>v.some(x=>x._id===m._id)?v:[...v,d])}});s.on('messages:delivered',({messageIds,deliveredAt})=>setMessages(v=>v.map(m=>messageIds.includes(String(m._id))?{...m,deliveredAt}:m)));s.on('messages:seen',({messageIds,seenAt})=>setMessages(v=>v.map(m=>messageIds.includes(String(m._id))?{...m,seen:true,seenAt,deliveredAt:m.deliveredAt||seenAt}:m)));s.on('typing:update',({from,typing})=>String(from)===String(selectedRef.current?._id)&&setTyping(typing));s.on('presence:update',p=>setUsers(v=>v.map(u=>String(u._id)===String(p.userId)?{...u,online:p.online,lastSeen:p.lastSeen||u.lastSeen}:u)));s.on('status:new',loadStatuses);s.on('status:deleted',loadStatuses);s.on('contact:request',loadRequests);s.on('contact:updated',()=>{loadContacts();loadRequests()});s.on('account:deleted',()=>{alert('Your account was deleted by admin.');logout()});bindCallSocket(s);bindConferenceSocket(s);return()=>s.disconnect()},[token,me?._id]);
+     useEffect(()=>{if(!token||!me?._id)return;const s=io(ROOT,{auth:{token},transports:['websocket','polling']});socketRef.current=s;s.on('message:new',async m=>{if(String(m.sender)===String(selectedRef.current?._id)&&me){const d=await decryptMessage(m,me,privateKeyRef.current);setMessages(v=>[...v,d]);s.emit('messages:delivered',{messageIds:[m._id]})}refreshChats()});s.on('message:sent',async m=>{if(me){const d=await decryptMessage(m,me,privateKeyRef.current);setMessages(v=>v.some(x=>x._id===m._id)?v:[...v,d])}});s.on('message:deleted',({messageId})=>{setMessages(v=>v.filter(m=>String(m._id)!==String(messageId)));refreshChats()});s.on('messages:delivered',({messageIds,deliveredAt})=>setMessages(v=>v.map(m=>messageIds.includes(String(m._id))?{...m,deliveredAt}:m)));s.on('messages:seen',({messageIds,seenAt})=>setMessages(v=>v.map(m=>messageIds.includes(String(m._id))?{...m,seen:true,seenAt,deliveredAt:m.deliveredAt||seenAt}:m)));s.on('typing:update',({from,typing})=>String(from)===String(selectedRef.current?._id)&&setTyping(typing));s.on('presence:update',p=>setUsers(v=>v.map(u=>String(u._id)===String(p.userId)?{...u,online:p.online,lastSeen:p.lastSeen||u.lastSeen}:u)));s.on('status:new',loadStatuses);s.on('status:deleted',loadStatuses);s.on('contact:request',loadRequests);s.on('contact:updated',()=>{loadContacts();loadRequests()});s.on('account:deleted',()=>{alert('Your account was deleted by admin.');logout()});bindCallSocket(s);bindConferenceSocket(s);return()=>s.disconnect()},[token,me?._id]);
      useEffect(()=>{if(!token||!search.trim()){setSearchResults([]);return}const t=setTimeout(()=>api('/users/search?q='+encodeURIComponent(search)).then(setSearchResults).catch(()=>setSearchResults([])),300);return()=>clearTimeout(t)},[search,token]);
      async function refreshChats(){try{setChats(await api('/chats'))}catch{}}async function loadStatuses(){try{setStatuses(await api('/statuses'))}catch{}}async function loadContacts(){try{setUsers(await api('/contacts'))}catch{}}async function loadRequests(){try{setRequests(await api('/contacts/requests'))}catch{}}async function loadLocks(){try{setLocks(await api('/locks'))}catch{}}
      function logout(){localStorage.removeItem(TK);sessionStorage.removeItem(PK);setToken('');setMe(null);privateKeyRef.current=null;socketRef.current?.disconnect()}
@@ -181,6 +212,20 @@
      async function requestAction(id,action){try{await api('/contacts/requests/'+id+'/'+action,{method:'PATCH'});await Promise.all([loadContacts(),loadRequests()])}catch(e){setErr(e.message)}}
      async function openChat(u,silent=false){if(!u)return;if(lockedIds.has(String(u._id))){const lock=locks.find(x=>String(x.peer._id)===String(u._id)),secret=prompt(`This chat is locked with ${lock?.type||'a secret'}. Enter it to open:`);if(secret===null)return;try{await api('/locks/'+u._id+'/verify',{method:'POST',body:JSON.stringify({secret})})}catch(e){alert(e.message);return}}setSelected(u);setTab('chats');try{const raw=await api('/messages/'+u._id);setMessages(await decryptList(raw));await refreshChats()}catch(e){if(!silent)setErr(e.message)}}
      async function lockChat(u){const type=(prompt('Lock type: pin, pattern, or password','pin')||'').toLowerCase();if(!['pin','pattern','password'].includes(type))return alert('Use pin, pattern, or password');const secret=prompt(type==='pattern'?'Enter pattern as numbers, for example 1-2-5-8':`Enter ${type} (minimum 4 characters)`);if(!secret)return;try{await api('/locks/'+u._id,{method:'PUT',body:JSON.stringify({type,secret})});await loadLocks();setSelected(null)}catch(e){alert(e.message)}}
+     async function deleteMessage(m){
+      if(!m?._id)return;
+      const mine=String(m.sender)===String(me?._id);
+      if(!confirm(mine?'Delete this message for everyone?':'Delete this message from your chat?'))return;
+      try{
+       await api('/messages/'+m._id,{method:'DELETE'});
+       setMessages(v=>v.filter(x=>String(x._id)!==String(m._id)));
+       await refreshChats();
+      }catch(e){
+       console.error('Delete message failed:',e);
+       alert(e.message||'Could not delete message');
+      }
+     }
+
      async function unlockChat(u){if(!confirm('Remove the chat lock?'))return;try{await api('/locks/'+u._id,{method:'DELETE'});await loadLocks()}catch(e){alert(e.message)}}
      async function sendMessage(payload={}){if(!selected||!me?.publicKey||!selected.publicKey)return;const t=(payload.text??text).trim();if(!t&&!payload.attachment)return;setText('');socketRef.current?.emit('typing:stop',{to:selected._id});try{const plain={text:t,attachment:payload.attachment||'',attachmentName:payload.attachmentName||'',type:payload.type||'text'},crypt=await encryptPayload(plain,me.publicKey,selected.publicKey),m=await api('/messages',{method:'POST',body:JSON.stringify({receiver:selected._id,type:plain.type,...crypt})}),d=await decryptMessage(m,me,privateKeyRef.current);setMessages(v=>v.some(x=>x._id===m._id)?v:[...v,d]);refreshChats()}catch(e){setErr(e.message)}}
 
@@ -194,7 +239,8 @@
       if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder){setErr('Voice recording is not supported by this browser.');return}
       try{
        setErr('');
-       const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});
+       const stream=await navigator.mediaDevices.getUserMedia({audio:getTalkioAudioConstraints(),video:false});
+       tuneTalkioMic(stream);
        const mime=recordingMime();
        const recorder=new MediaRecorder(stream,mime?{mimeType:mime,audioBitsPerSecond:64000}:{audioBitsPerSecond:64000});
        recordStreamRef.current=stream;
@@ -300,38 +346,491 @@
       }
      }
     async function viewStatus(g){setStatusViewer(g);for(const s of g.statuses)if(String(g.user._id)!==String(me._id))api('/statuses/'+s._id+'/view',{method:'POST'}).catch(()=>{})}
-     async function getMedia(video=true){return navigator.mediaDevices.getUserMedia({audio:true,video})}function cleanupCall(){pcRef.current?.close();pcRef.current=null;localStreamRef.current?.getTracks().forEach(t=>t.stop());localStreamRef.current=null;pendingIce.current=[];setCall(null)}
-     async function makeCall(type,u=selected){if(!u)return;try{const stream=await getMedia(type==='video'),pc=new RTCPeerConnection(rtcCfg),callId=crypto.randomUUID();localStreamRef.current=stream;pcRef.current=pc;stream.getTracks().forEach(t=>pc.addTrack(t,stream));pc.ontrack=e=>{if(remoteVideo.current)remoteVideo.current.srcObject=e.streams[0]};pc.onicecandidate=e=>e.candidate&&socketRef.current.emit('call:ice',{to:u._id,candidate:e.candidate,callId});const offer=await pc.createOffer();await pc.setLocalDescription(offer);setCall({direction:'out',peer:u,type,callId,state:'calling'});setTimeout(()=>{if(localVideo.current)localVideo.current.srcObject=stream},50);socketRef.current.emit('call:offer',{to:u._id,offer,type,callId},ack=>{if(!ack?.ok){alert('User is offline, unavailable, or not in your contacts');cleanupCall()}})}catch(e){alert('Camera/microphone permission is required: '+e.message)}}
-     function bindCallSocket(s){s.on('call:incoming',d=>setCall({direction:'in',peer:users.find(u=>String(u._id)===String(d.from))||{_id:d.from,username:d.callerName},...d,state:'ringing'}));s.on('call:answered',async d=>{if(!pcRef.current)return;await pcRef.current.setRemoteDescription(d.answer);for(const c of pendingIce.current)await pcRef.current.addIceCandidate(c);pendingIce.current=[];setCall(v=>v&&({...v,state:'connected'}))});s.on('call:ice',async({candidate})=>{if(pcRef.current?.remoteDescription)try{await pcRef.current.addIceCandidate(candidate)}catch{}else pendingIce.current.push(candidate)});s.on('call:rejected',cleanupCall);s.on('call:ended',cleanupCall);s.on('call:unavailable',cleanupCall)}
-     async function answerCall(){try{const stream=await getMedia(call.type==='video'),pc=new RTCPeerConnection(rtcCfg);localStreamRef.current=stream;pcRef.current=pc;stream.getTracks().forEach(t=>pc.addTrack(t,stream));pc.ontrack=e=>{if(remoteVideo.current)remoteVideo.current.srcObject=e.streams[0]};pc.onicecandidate=e=>e.candidate&&socketRef.current.emit('call:ice',{to:call.from,candidate:e.candidate,callId:call.callId});await pc.setRemoteDescription(call.offer);const ans=await pc.createAnswer();await pc.setLocalDescription(ans);socketRef.current.emit('call:answer',{to:call.from,answer:ans,callId:call.callId});setCall(v=>({...v,state:'connected'}));setTimeout(()=>{if(localVideo.current)localVideo.current.srcObject=stream},50)}catch(e){alert(e.message);rejectCall()}}function rejectCall(){if(call?.direction==='in')socketRef.current.emit('call:reject',{to:call.from,callId:call.callId});else if(call?.peer)socketRef.current.emit('call:end',{to:call.peer._id,callId:call.callId});cleanupCall()}
-     async function cycleCallAudio(){
-      const order=['phone','speaker','bluetooth'];
-      const next=order[(order.indexOf(audioOutput)+1)%order.length];
+     async function getMedia(video=true){
+     if(!navigator.mediaDevices?.getUserMedia){
+      throw new Error('Microphone/camera is not supported by this browser.');
+     }
 
-      if(next==='bluetooth'){
-       try{
-        const devices=await navigator.mediaDevices?.enumerateDevices?.();
-        const bluetooth=(devices||[]).find(d=>d.kind==='audiooutput'&&/bluetooth|buds|airpods|headset|wireless/i.test(d.label||''));
-        if(!bluetooth){
-         alert('Connect a Bluetooth audio device first.');
-         return;
-        }
-        if(typeof remoteVideo.current?.setSinkId==='function'){
-         await remoteVideo.current.setSinkId(bluetooth.deviceId);
-        }
-        setAudioOutput('bluetooth');
-        return;
-       }catch(e){
-        alert('Bluetooth audio selection is not supported by this browser/device.');
-        return;
-       }
-      }
+     // AUDIO CALL:
+     // Keep this deliberately simple. This is the most reliable setup on
+     // Android Chrome and avoids advanced constraints breaking voice calls.
+     if(!video){
+      // WhatsApp-style browser approach:
+      // keep the ORIGINAL microphone track so Chrome/Android can use its
+      // native acoustic echo canceller. Do not route the mic through WebAudio.
+      let stream;
 
       try{
-       if(typeof remoteVideo.current?.setSinkId==='function'){
-        await remoteVideo.current.setSinkId('default');
-       }
+       stream=await navigator.mediaDevices.getUserMedia({
+        audio:{
+         echoCancellation:{ideal:true},
+         noiseSuppression:{ideal:true},
+         autoGainControl:{ideal:false},
+         channelCount:{ideal:1}
+        },
+        video:false
+       });
+      }catch{
+       stream=await navigator.mediaDevices.getUserMedia({
+        audio:true,
+        video:false
+       });
+      }
+
+      const track=stream.getAudioTracks()[0];
+      if(!track){
+       stream.getTracks().forEach(t=>t.stop());
+       throw new Error('Microphone could not be opened.');
+      }
+
+      track.enabled=true;
+      try{track.contentHint='speech'}catch{}
+
+      // Re-apply only settings the browser says it supports.
+      // This keeps the raw mic track and preserves hardware/browser AEC.
+      try{
+       const supported=navigator.mediaDevices.getSupportedConstraints?.()||{};
+       const c={};
+       if(supported.echoCancellation)c.echoCancellation={ideal:true};
+       if(supported.noiseSuppression)c.noiseSuppression={ideal:true};
+       if(supported.autoGainControl)c.autoGainControl=false;
+       if(supported.channelCount)c.channelCount=1;
+       if(supported.voiceIsolation)c.voiceIsolation=true;
+       if(Object.keys(c).length)await track.applyConstraints(c);
       }catch{}
+
+      return stream;
+     }
+
+     // VIDEO CALL:
+     // Keep the stronger processing that is already working well.
+     let stream;
+     try{
+      stream=await navigator.mediaDevices.getUserMedia({
+       audio:getTalkioAudioConstraints(),
+       video:{facingMode:'user'}
+      });
+     }catch{
+      stream=await navigator.mediaDevices.getUserMedia({
+       audio:true,
+       video:{facingMode:'user'}
+      });
+     }
+
+     tuneTalkioMic(stream);
+     try{stream.getAudioTracks().forEach(t=>{t.contentHint='speech'})}catch{}
+     return stream;
+    }
+
+    function stopRemoteVoiceGuard(){
+     if(remoteVoiceTimerRef.current){
+      clearInterval(remoteVoiceTimerRef.current);
+      remoteVoiceTimerRef.current=null;
+     }
+     if(remoteVoiceReleaseRef.current){
+      clearTimeout(remoteVoiceReleaseRef.current);
+      remoteVoiceReleaseRef.current=null;
+     }
+     remoteVoiceAnalyserRef.current=null;
+     try{remoteVoiceCtxRef.current?.close?.()}catch{}
+     remoteVoiceCtxRef.current=null;
+
+     // Always restore our microphone when the guard stops.
+     try{
+      localStreamRef.current?.getAudioTracks?.().forEach(t=>{t.enabled=true});
+     }catch{}
+    }
+
+    function startRemoteVoiceGuard(remoteStream){
+     // This guard is intentionally used only for AUDIO calls.
+     // During remote speech it temporarily disables our microphone so the
+     // loudspeaker voice cannot re-enter our microphone and repeat in a loop.
+     const local=localStreamRef.current;
+     if(!local||local.getVideoTracks?.().length>0)return;
+     if(!remoteStream?.getAudioTracks?.().length)return;
+
+     try{
+      stopRemoteVoiceGuard();
+
+      const Ctx=window.AudioContext||window.webkitAudioContext;
+      if(!Ctx)return;
+
+      const ctx=new Ctx();
+      remoteVoiceCtxRef.current=ctx;
+      if(ctx.state==='suspended')ctx.resume?.().catch(()=>{});
+
+      const source=ctx.createMediaStreamSource(
+       new MediaStream(remoteStream.getAudioTracks())
+      );
+      const analyser=ctx.createAnalyser();
+      analyser.fftSize=512;
+      analyser.smoothingTimeConstant=0.72;
+      source.connect(analyser);
+      remoteVoiceAnalyserRef.current=analyser;
+
+      const data=new Uint8Array(analyser.fftSize);
+
+      remoteVoiceTimerRef.current=setInterval(()=>{
+       const a=remoteVoiceAnalyserRef.current;
+       const mic=localStreamRef.current?.getAudioTracks?.()[0];
+       if(!a||!mic)return;
+
+       a.getByteTimeDomainData(data);
+
+       let sum=0;
+       for(let i=0;i<data.length;i++){
+        const x=(data[i]-128)/128;
+        sum+=x*x;
+       }
+       const rms=Math.sqrt(sum/data.length);
+
+       // Strong half-duplex echo protection:
+       // remote speech => our mic OFF
+       // ~240ms after remote speech ends => our mic ON
+       if(rms>0.018){
+        if(remoteVoiceReleaseRef.current){
+         clearTimeout(remoteVoiceReleaseRef.current);
+         remoteVoiceReleaseRef.current=null;
+        }
+        if(mic.enabled)mic.enabled=false;
+       }else if(!mic.enabled&&!remoteVoiceReleaseRef.current){
+        remoteVoiceReleaseRef.current=setTimeout(()=>{
+         const currentMic=localStreamRef.current?.getAudioTracks?.()[0];
+         if(currentMic)currentMic.enabled=true;
+         remoteVoiceReleaseRef.current=null;
+        },240);
+       }
+      },35);
+     }catch(e){
+      console.warn('Talkio remote voice guard fallback:',e);
+     }
+    }
+
+    function attachRemoteCallStream(stream){
+     if(!stream)return;
+
+     const incomingAudio=stream.getAudioTracks?.()[0];
+     const incomingVideo=stream.getVideoTracks?.()[0];
+
+     if(!remoteCallStreamRef.current){
+      remoteCallStreamRef.current=new MediaStream();
+     }
+
+     const output=remoteCallStreamRef.current;
+
+     // For audio calls, prevent loudspeaker -> microphone feedback loops.
+     startRemoteVoiceGuard(stream);
+
+     // Exactly ONE remote audio track.
+     if(incomingAudio&&!remoteTrackIdsRef.current.has(incomingAudio.id)){
+      output.getAudioTracks().forEach(oldTrack=>{
+       if(oldTrack.id!==incomingAudio.id){
+        try{output.removeTrack(oldTrack)}catch{}
+       }
+      });
+      remoteTrackIdsRef.current.add(incomingAudio.id);
+      output.addTrack(incomingAudio);
+     }
+
+     // Exactly ONE remote video track.
+     if(incomingVideo&&!remoteTrackIdsRef.current.has(incomingVideo.id)){
+      output.getVideoTracks().forEach(oldTrack=>{
+       if(oldTrack.id!==incomingVideo.id){
+        try{output.removeTrack(oldTrack)}catch{}
+       }
+      });
+      remoteTrackIdsRef.current.add(incomingVideo.id);
+      output.addTrack(incomingVideo);
+     }
+
+     const el=remoteVideo.current;
+     if(!el)return;
+
+     try{
+      if(el.srcObject!==output)el.srcObject=output;
+      el.muted=false;
+      el.volume=1;
+      const p=el.play?.();
+      if(p?.catch)p.catch(()=>{});
+     }catch{}
+    }
+
+    useEffect(()=>{
+     if(!call||!remoteCallStreamRef.current)return;
+     const timer=setTimeout(()=>{
+      attachRemoteCallStream(remoteCallStreamRef.current);
+     },80);
+     return()=>clearTimeout(timer);
+    },[call?.callId,call?.state,call?.type]);
+
+
+    function cleanupCall(){
+     try{
+      if(pcRef.current){
+       pcRef.current.ontrack=null;
+       pcRef.current.onicecandidate=null;
+       pcRef.current.onconnectionstatechange=null;
+       pcRef.current.close();
+      }
+     }catch{}
+     pcRef.current=null;
+
+     try{
+      localStreamRef.current?.getTracks()?.forEach(track=>track.stop());
+     }catch{}
+     stopRemoteVoiceGuard();
+     localStreamRef.current=null;
+
+     try{
+      remoteCallStreamRef.current?.getTracks?.().forEach(track=>track.stop());
+     }catch{}
+     remoteCallStreamRef.current=null;
+     remoteTrackIdsRef.current.clear();
+
+     try{
+      if(remoteVideo.current){
+       remoteVideo.current.pause?.();
+       remoteVideo.current.srcObject=null;
+      }
+     }catch{}
+
+     try{
+      if(localVideo.current){
+       localVideo.current.srcObject=null;
+      }
+     }catch{}
+
+     pendingIce.current=[];
+     activeCallIdRef.current=null;
+     answeringRef.current=false;
+     setAudioOutput('phone');
+     setCall(null);
+    }
+
+    async function makeCall(type,u=selected){
+     if(!u||activeCallIdRef.current)return;
+     setAudioOutput('phone');
+
+     try{
+      const stream=await getMedia(type==='video');
+      const pc=new RTCPeerConnection(rtcCfg);
+      const callId=crypto.randomUUID();
+
+      localStreamRef.current=stream;
+      pcRef.current=pc;
+      activeCallIdRef.current=callId;
+      pendingIce.current=[];
+
+      stream.getTracks().forEach(track=>pc.addTrack(track,stream));
+
+      pc.ontrack=e=>{
+       const remoteStream=e.streams?.[0]||new MediaStream([e.track]);
+       attachRemoteCallStream(remoteStream);
+      };
+
+      pc.onicecandidate=e=>{
+       if(e.candidate){
+        socketRef.current?.emit('call:ice',{
+         to:u._id,
+         candidate:e.candidate,
+         callId
+        });
+       }
+      };
+
+      pc.onconnectionstatechange=()=>{
+       if(['failed','closed'].includes(pc.connectionState)){
+        cleanupCall();
+       }
+      };
+
+      const offer=await pc.createOffer({
+       offerToReceiveAudio:true,
+       offerToReceiveVideo:type==='video'
+      });
+
+      await pc.setLocalDescription(offer);
+
+      setCall({
+       direction:'out',
+       peer:u,
+       type,
+       callId,
+       state:'calling'
+      });
+
+      if(type==='video'){
+       setTimeout(()=>{
+        if(localVideo.current)localVideo.current.srcObject=stream;
+       },50);
+      }
+
+      socketRef.current?.emit('call:offer',{
+       to:u._id,
+       offer:pc.localDescription,
+       type,
+       callId
+      },ack=>{
+       if(!ack?.ok){
+        alert('User is offline, unavailable, or not in your contacts');
+        cleanupCall();
+       }
+      });
+     }catch(e){
+      cleanupCall();
+      alert('Audio call could not start: '+(e?.message||'Microphone permission is required.'));
+     }
+    }
+     function bindCallSocket(s){
+     s.on('call:incoming',d=>{
+      if(!d?.callId)return;
+      if(activeCallIdRef.current===d.callId)return;
+
+      if(activeCallIdRef.current){
+       s.emit('call:reject',{to:d.from,callId:d.callId});
+       return;
+      }
+
+      activeCallIdRef.current=d.callId;
+      answeringRef.current=false;
+
+      setCall({
+       direction:'in',
+       peer:users.find(u=>String(u._id)===String(d.from))||{
+        _id:d.from,
+        username:d.callerName
+       },
+       ...d,
+       state:'ringing'
+      });
+     });
+
+     s.on('call:answered',async d=>{
+      const pc=pcRef.current;
+      if(!pc||!d?.answer)return;
+
+      try{
+       await pc.setRemoteDescription(new RTCSessionDescription(d.answer));
+
+       const queued=[...pendingIce.current];
+       pendingIce.current=[];
+
+       for(const candidate of queued){
+        try{
+         await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        }catch{}
+       }
+
+       setCall(v=>v?{...v,state:'connected'}:v);
+      }catch(e){
+       console.error('Talkio call answer error:',e);
+       cleanupCall();
+      }
+     });
+
+     s.on('call:ice',async({candidate,callId})=>{
+      if(!candidate)return;
+      if(callId&&activeCallIdRef.current&&callId!==activeCallIdRef.current)return;
+
+      const pc=pcRef.current;
+
+      if(pc?.remoteDescription){
+       try{
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+       }catch{}
+      }else{
+       pendingIce.current.push(candidate);
+      }
+     });
+
+     s.on('call:rejected',()=>cleanupCall());
+     s.on('call:ended',()=>cleanupCall());
+     s.on('call:unavailable',()=>cleanupCall());
+    }
+     async function answerCall(){
+     if(!call||call.state!=='ringing'||answeringRef.current)return;
+     answeringRef.current=true;
+     setAudioOutput('phone');
+
+     try{
+      const stream=await getMedia(call.type==='video');
+      const pc=new RTCPeerConnection(rtcCfg);
+
+      localStreamRef.current=stream;
+      pcRef.current=pc;
+      pendingIce.current=[];
+
+      stream.getTracks().forEach(track=>pc.addTrack(track,stream));
+
+      pc.ontrack=e=>{
+       const remoteStream=e.streams?.[0]||new MediaStream([e.track]);
+       attachRemoteCallStream(remoteStream);
+      };
+
+      pc.onicecandidate=e=>{
+       if(e.candidate){
+        socketRef.current?.emit('call:ice',{
+         to:call.from,
+         candidate:e.candidate,
+         callId:call.callId
+        });
+       }
+      };
+
+      pc.onconnectionstatechange=()=>{
+       if(['failed','closed'].includes(pc.connectionState)){
+        cleanupCall();
+       }
+      };
+
+      await pc.setRemoteDescription(new RTCSessionDescription(call.offer));
+
+      const answer=await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+
+      socketRef.current?.emit('call:answer',{
+       to:call.from,
+       answer:pc.localDescription,
+       callId:call.callId
+      });
+
+      setCall(v=>v?{...v,state:'connected'}:v);
+
+      if(call.type==='video'){
+       setTimeout(()=>{
+        if(localVideo.current)localVideo.current.srcObject=stream;
+       },50);
+      }
+     }catch(e){
+      answeringRef.current=false;
+      alert('Could not answer audio call: '+(e?.message||'Unknown error'));
+      rejectCall();
+     }
+    }function rejectCall(){if(call?.direction==='in')socketRef.current.emit('call:reject',{to:call.from,callId:call.callId});else if(call?.peer)socketRef.current.emit('call:end',{to:call.peer._id,callId:call.callId});cleanupCall()}
+     async function cycleCallAudio(){
+      const next=audioOutput==='speaker'?'phone':'speaker';
+      const mediaEl=remoteVideo.current;
+
+      try{
+       // Browser support differs by phone. When output devices are exposed,
+       // choose the closest matching earpiece/receiver or loudspeaker device.
+       if(mediaEl&&typeof mediaEl.setSinkId==='function'&&navigator.mediaDevices?.enumerateDevices){
+        const devices=await navigator.mediaDevices.enumerateDevices();
+        const outputs=devices.filter(d=>d.kind==='audiooutput');
+
+        if(next==='speaker'){
+         const speaker=outputs.find(d=>/speaker|loudspeaker/i.test(d.label||''));
+         if(speaker)await mediaEl.setSinkId(speaker.deviceId);
+        }else{
+         const earpiece=outputs.find(d=>/earpiece|receiver|communications|phone/i.test(d.label||''));
+         if(earpiece)await mediaEl.setSinkId(earpiece.deviceId);
+        }
+       }
+      }catch(e){
+       // On many mobile browsers the OS controls earpiece/speaker routing.
+       // Keep the Talkio button state working even when setSinkId is unavailable.
+       console.warn('Audio output routing is controlled by this browser/device.',e);
+      }
 
       setAudioOutput(next);
      }
@@ -404,7 +903,7 @@
         profile={()=>{setMoreMenuOpen(false);setSettingsPage('account')}}
         logout={()=>{setMoreMenuOpen(false);logout()}}
       />}
-      <main className={'chat-pane '+(!selected?'empty-mobile':'')}>{!selected?<div className="wa-empty-panel"><div className="empty-center"><LockKeyhole/><h2>{tr('Private messaging')}</h2><p>{tr('New message and media contents are end-to-end encrypted. Account metadata used for search and approval is not E2EE.')}</p></div></div>:<><header className="chat-head"><button className="back" onClick={()=>setSelected(null)}><ArrowLeft/></button><Avatar user={selected}/><div className="peer"><b>{label(selected)}</b><span>{selected.phone} · {typing?tr('typing…'):selected.online?tr('online'):selected.lastSeen?tr('last seen ')+when(selected.lastSeen):tr('offline')}</span></div><div className="head-actions"><button onClick={()=>makeCall('video')}><Video/></button><button onClick={()=>makeCall('audio')}><Phone/></button>{lockedIds.has(String(selected._id))?<button onClick={()=>unlockChat(selected)} title={tr("Remove lock")}><Unlock/></button>:<button onClick={()=>lockChat(selected)} title={tr("Lock chat")}><Lock/></button>}</div></header><div className="messages">{messages.map(m=><Bubble key={m._id} m={m} mine={String(m.sender)===String(me._id)}/>)}</div><div className={'composer '+(recording?'voice-recording':'')}>
+      <main className={'chat-pane '+(!selected?'empty-mobile':'')}>{!selected?<div className="wa-empty-panel"><div className="empty-center"><LockKeyhole/><h2>{tr('Private messaging')}</h2><p>{tr('New message and media contents are end-to-end encrypted. Account metadata used for search and approval is not E2EE.')}</p></div></div>:<><header className="chat-head"><button className="back" onClick={()=>setSelected(null)}><ArrowLeft/></button><Avatar user={selected}/><div className="peer"><b>{label(selected)}</b><span>{selected.phone} · {typing?tr('typing…'):selected.online?tr('online'):selected.lastSeen?tr('last seen ')+when(selected.lastSeen):tr('offline')}</span></div><div className="head-actions"><button onClick={()=>makeCall('video')}><Video/></button><button onClick={()=>makeCall('audio')} title="Audio call" aria-label="Audio call"><Phone/></button>{lockedIds.has(String(selected._id))?<button onClick={()=>unlockChat(selected)} title={tr("Remove lock")}><Unlock/></button>:<button onClick={()=>lockChat(selected)} title={tr("Lock chat")}><Lock/></button>}</div></header><div className="messages">{messages.map(m=><Bubble key={m._id} m={m} mine={String(m.sender)===String(me._id)} onDelete={deleteMessage}/>)}</div><div className={'composer '+(recording?'voice-recording':'')}>
      {recording?<>
       <button className="voice-cancel" type="button" onClick={cancelVoiceRecording} title={tr('Cancel voice message')}><X/></button>
       <div className="voice-record-status"><span className="voice-dot"/><b>{voiceTime(recordSeconds)}</b><span>{tr('Recording voice message')}</span></div>
@@ -418,7 +917,7 @@
      </>}
     </div></>}</main>
       {settingsPage==='help'&&<HelpSupportPanel close={()=>setSettingsPage('')}/>} 
-      {settingsPage&&settingsPage!=='help'&&<SettingsPanel page={settingsPage} me={me} api={api} lang={lang} setLang={v=>{setLang(v);localStorage.setItem('talkioLang',v)}} close={()=>setSettingsPage('')} onMe={setMe}/>} {showStatusAdd&&<StatusAdd close={()=>setShowStatusAdd(false)} submit={addStatus} choose={()=>statusFileRef.current.click()} inputRef={statusFileRef} file={statusFile}/>} {statusViewer&&<StatusViewer group={statusViewer} me={me} api={api} close={()=>{setStatusViewer(null);loadStatuses()}} onDeleted={loadStatuses}/>}{call&&<CallOverlay call={call} answer={answerCall} end={rejectCall} remoteVideo={remoteVideo} localVideo={localVideo}/>} {conferencePicker&&<ConferencePicker users={users} selected={conferenceSelected} toggle={toggleConferenceUser} close={()=>{setConferencePicker(false);setConferenceSelected([])}} start={type=>startConference(type,users.filter(u=>conferenceSelected.includes(String(u._id))))}/>} {conference&&<ConferenceOverlay conf={conference} users={users} join={joinConference} leave={leaveConference} stream={confStream.current}/>} 
+      {settingsPage&&settingsPage!=='help'&&<SettingsPanel page={settingsPage} me={me} api={api} lang={lang} setLang={v=>{setLang(v);localStorage.setItem('talkioLang',v)}} close={()=>setSettingsPage('')} onMe={setMe}/>} {showStatusAdd&&<StatusAdd close={()=>setShowStatusAdd(false)} submit={addStatus} choose={()=>statusFileRef.current.click()} inputRef={statusFileRef} file={statusFile}/>} {statusViewer&&<StatusViewer group={statusViewer} me={me} api={api} close={()=>{setStatusViewer(null);loadStatuses()}} onDeleted={loadStatuses}/>}{call&&<CallOverlay call={call} answer={answerCall} end={rejectCall} remoteVideo={remoteVideo} localVideo={localVideo} audioOutput={audioOutput} toggleAudio={cycleCallAudio}/>} {conferencePicker&&<ConferencePicker users={users} selected={conferenceSelected} toggle={toggleConferenceUser} close={()=>{setConferencePicker(false);setConferenceSelected([])}} start={type=>startConference(type,users.filter(u=>conferenceSelected.includes(String(u._id))))}/>} {conference&&<ConferenceOverlay conf={conference} users={users} join={joinConference} leave={leaveConference} stream={confStream.current}/>} 
      </div>
     }
 
@@ -865,7 +1364,7 @@
     function SearchResults({results,contacts,outgoing,add}){const ids=new Set(contacts.map(x=>String(x._id))),outs=new Set(outgoing.map(x=>String(x.recipient?._id)));return <div className="list search-results">{results.length===0?<div className="filter-empty">{tr('No approved users found.')}</div>:results.map(u=><div className="row" key={u._id}><Avatar user={u}/><div className="row-main"><b>{label(u)}</b><span className="preview">{u.phone}</span></div>{ids.has(String(u._id))?<span className="added-tag">{tr('Added')}</span>:outs.has(String(u._id))?<span className="pending-tag">{tr('Pending')}</span>:<button className="mini-add" onClick={()=>add(u)}><UserPlus/> {tr('Add')}</button>}</div>)}</div>}
     function ContactRequests({data,action}){return <div className="list"><div className="list-section-title">{tr("Incoming requests")}</div>{data.incoming.length===0&&<div className="filter-empty">{tr('No incoming requests.')}</div>}{data.incoming.map(r=><div className="row" key={r._id}><Avatar user={r.requester}/><div className="row-main"><b>{label(r.requester)}</b><span className="preview">{r.requester.phone}</span></div><div className="contact-actions"><button className="accept-small" onClick={()=>action(r._id,'accept')}><Check/> {tr('Accept')}</button><button className="reject-small" onClick={()=>action(r._id,'reject')}><X/></button></div></div>)}<div className="list-section-title">{tr("Sent requests")}</div>{data.outgoing.map(r=><div className="row" key={r._id}><Avatar user={r.recipient}/><div className="row-main"><b>{label(r.recipient)}</b><span className="preview">{tr('Waiting for approval')}</span></div></div>)}</div>}
     function ChatList({chats,users,filter,locked,open,unlock}){const ids=new Set(chats.map(c=>String(c.user._id))),showChats=filter==='unread'?chats.filter(c=>c.unread>0&&!locked.has(String(c.user._id))):filter==='locked'?chats.filter(c=>locked.has(String(c.user._id))):chats.filter(c=>!locked.has(String(c.user._id)));return <div className="list">{showChats.map(c=><button className="row" key={c.user._id} onClick={()=>open(c.user)}><Avatar user={c.user}/><div className="row-main"><div><b>{label(c.user)}</b><time>{when(c.lastMessage.createdAt)}</time></div><div><span className="preview">🔒 {tr('End-to-end encrypted message')}</span>{c.unread>0&&<em>{c.unread}</em>}</div></div>{locked.has(String(c.user._id))&&<Lock className="row-lock"/>}</button>)}{filter==='all'&&users.filter(u=>!ids.has(String(u._id))).map(u=><button className="row" key={u._id} onClick={()=>open(u)}><Avatar user={u}/><div className="row-main"><b>{label(u)}</b><span className="preview">{u.phone}</span></div></button>)}{filter==='locked'&&users.filter(u=>!ids.has(String(u._id))).map(u=><div className="row" key={u._id}><Avatar user={u}/><button className="row-main plain-open" onClick={()=>open(u)}><b>{label(u)}</b><span className="preview">{tr('Locked chat')}</span></button><button className="icon-btn" onClick={()=>unlock(u)}><Unlock/></button></div>)}{filter==='unread'&&showChats.length===0&&<div className="filter-empty">{tr('No unread messages.')}</div>}{filter==='locked'&&users.length===0&&<div className="filter-empty">{tr('No locked chats.')}</div>}</div>}
-    function Bubble({m,mine}){return <div className={'bubble-wrap '+(mine?'mine':'theirs')}><div className="bubble">{m.type==='image'&&m.attachment&&<img className="media" src={m.attachment} alt=""/>}{m.type==='video'&&m.attachment&&<video className="media" src={m.attachment} controls/>}{m.type==='audio'&&m.attachment&&<audio src={m.attachment} controls/>}{m.type==='file'&&m.attachment&&<a href={m.attachment} download={m.attachmentName}><FileText/> {m.attachmentName}</a>}{m.text&&<div className="msg-text">{m.text}</div>}<div className="meta"><LockKeyhole/><span>{when(m.createdAt)}</span>{mine&&(m.seen?<CheckCheck className="seen"/>:m.deliveredAt?<CheckCheck/>:<Check/>)}</div></div></div>}
+    function Bubble({m,mine,onDelete}){return <div className={'bubble-wrap '+(mine?'mine':'theirs')}><div className="bubble">{m.type==='image'&&m.attachment&&<img className="media" src={m.attachment} alt=""/>}{m.type==='video'&&m.attachment&&<video className="media" src={m.attachment} controls/>}{m.type==='audio'&&m.attachment&&<audio src={m.attachment} controls/>}{m.type==='file'&&m.attachment&&<a href={m.attachment} download={m.attachmentName}><FileText/> {m.attachmentName}</a>}{m.text&&<div className="msg-text">{m.text}</div>}<div className="meta"><LockKeyhole/><span>{when(m.createdAt)}</span>{mine&&(m.seen?<CheckCheck className="seen"/>:m.deliveredAt?<CheckCheck/>:<Check/>)}<button type="button" className="message-delete-btn" onClick={()=>onDelete?.(m)} title="Delete message" aria-label="Delete message"><Trash2/></button></div></div></div>}
     function StatusList({me,groups,open,add}){const mine=groups.find(g=>String(g.user._id)===String(me._id));return <div className="list"><button className="row" onClick={()=>mine?open(mine):add()}><div className="avatar add-avatar"><Avatar user={me} status={!!mine}/>{!mine&&<Plus/>}</div><div className="row-main"><b>{tr('My status')}</b><span className="preview">{mine?`${mine.statuses.length} ${mine.statuses.length===1?'status':'statuses'} shared`:tr('Add status for 24 hours')}</span></div></button>{groups.filter(g=>String(g.user._id)!==String(me._id)).map(g=><button className="row" key={g.user._id} onClick={()=>open(g)}><Avatar user={g.user} status/><div className="row-main"><div><b>{label(g.user)}</b>{g.unseen>0&&<em>{g.unseen}</em>}</div><span className="preview">{when(g.statuses.at(-1)?.createdAt)}</span></div></button>)}</div>}
     function Calls({users,call,conference}){return <div className="list"><button className="row special conference-call-row" onClick={conference}><div className="round-icon conference-multicolor-icon"><Users/></div><div className="row-main"><b>{tr('Conference call')}</b></div></button>{users.map(u=><div className="row" key={u._id}><Avatar user={u}/><div className="row-main"><b>{label(u)}</b><span className="preview">{u.online?tr('online'):tr('last seen ')+when(u.lastSeen)}</span></div><button className="icon-green" onClick={()=>call('audio',u)}><Phone/></button><button className="icon-green" onClick={()=>call('video',u)}><Video/></button></div>)}</div>}
     function StatusAdd({close,submit,choose,inputRef,file}){const[t,setT]=useState('');return <div className="modal"><div className="status-add"><button className="close" onClick={close}><X/></button><h2>{tr('Add status')}</h2><textarea value={t} onChange={e=>setT(e.target.value)} placeholder={tr("Type a status…")}/><button className="primary" onClick={()=>t.trim()&&submit({type:'text',text:t,background:'#0b846d'})}>{tr('Share text status')}</button><input ref={inputRef} type="file" accept="image/*,video/*" hidden onChange={file}/><button className="secondary" onClick={choose}><Camera/> {tr('Add photo or video')}</button><small>{tr('Videos are automatically converted for browser playback · Maximum 60 seconds.')}</small><small>{tr('Status disappears automatically after 24 hours.')}</small></div></div>}
@@ -960,7 +1459,7 @@
       </div>
      </div>
     }
-    function CallOverlay({call,answer,end,remoteVideo,localVideo}){return <div className="call-overlay"><div className="call-name"><Avatar user={call.peer||{username:call.callerName}} size={80}/><h2>{label(call.peer)||call.callerName}</h2><p>{call.state==='ringing'?tr('Incoming ')+(call.type==='video'?'ویڈیو':'آڈیو')+tr(' call'):call.state==='calling'?tr('Calling…'):tr('Connected · WebRTC encrypted')}</p></div>{call.type==='video'&&<><video ref={remoteVideo} className="remote" autoPlay playsInline/><video ref={localVideo} className="local" autoPlay playsInline muted/></>}<div className="call-actions">{call.direction==='in'&&call.state==='ringing'&&<button className="accept" onClick={answer}><Phone/></button>}<button className="hang" onClick={end}><PhoneOff/></button></div></div>}
+    function CallOverlay({call,answer,end,remoteVideo,localVideo,audioOutput,toggleAudio}){return <div className="call-overlay"><div className="call-name"><Avatar user={call.peer||{username:call.callerName}} size={80}/><h2>{label(call.peer)||call.callerName}</h2><p>{call.state==='ringing'?tr('Incoming ')+(call.type==='video'?'ویڈیو':'آڈیو')+tr(' call'):call.state==='calling'?tr('Calling…'):tr('Connected · WebRTC encrypted')}</p></div>{call.type==='video'?<><video ref={remoteVideo} className="remote" autoPlay playsInline/><video ref={localVideo} className="local" autoPlay playsInline muted/></>:<audio ref={remoteVideo} className="remote-call-audio" autoPlay playsInline preload="auto" />}<div className="call-actions">{call.direction==='in'&&call.state==='ringing'&&<button className="accept" onClick={answer} aria-label="Accept call"><Phone/></button>}<button className="hang" onClick={end} aria-label="End call"><PhoneOff/></button><button className={'audio-route-btn '+(audioOutput==='speaker'?'audio-speaker':'audio-phone')} onClick={toggleAudio} aria-label={audioOutput==='speaker'?'Use phone earpiece':'Use speaker'} title={audioOutput==='speaker'?'Phone earpiece':'Speaker'}><Volume2/><small>{audioOutput==='speaker'?'Speaker':'Phone'}</small></button></div></div>}
     function ConferencePicker({users,selected,toggle,close,start}){
      const [q,setQ]=useState('');
      const shown=users.filter(u=>{

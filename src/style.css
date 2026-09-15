@@ -7722,3 +7722,112 @@
     bottom:auto !important;
   }
 }
+
+
+/* =========================================================
+   TALKIO CALL AUDIO — PHONE EARPIECE / SPEAKER ONLY
+   Default: Phone. Tap once for Speaker, tap again for Phone.
+   ========================================================= */
+.remote-call-audio{
+  position:absolute!important;
+  width:1px!important;
+  height:1px!important;
+  opacity:0!important;
+  pointer-events:none!important;
+}
+.call-overlay .call-actions .audio-route-btn{
+  width:56px!important;
+  height:56px!important;
+  min-width:56px!important;
+  min-height:56px!important;
+  border:0!important;
+  border-radius:50%!important;
+  display:flex!important;
+  flex-direction:column!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:1px!important;
+  margin:0!important;
+  background:#fff!important;
+  color:#263445!important;
+  box-shadow:0 7px 18px rgba(0,0,0,.22)!important;
+}
+.call-overlay .call-actions .audio-route-btn svg{
+  width:21px!important;
+  height:21px!important;
+}
+.call-overlay .call-actions .audio-route-btn small{
+  display:block!important;
+  font-size:8px!important;
+  line-height:9px!important;
+  font-weight:800!important;
+}
+.call-overlay .call-actions .audio-route-btn.audio-speaker{
+  background:#1687e8!important;
+  color:#fff!important;
+}
+.call-overlay .call-actions .audio-route-btn.audio-phone{
+  background:#fff!important;
+  color:#263445!important;
+}
+@media(max-width:360px){
+  .call-overlay .call-actions .audio-route-btn{
+    width:52px!important;
+    height:52px!important;
+    min-width:52px!important;
+    min-height:52px!important;
+  }
+}
+
+
+/* ===== Talkio audio-call compatibility fix ===== */
+.remote-call-audio{
+  position:absolute !important;
+  width:1px !important;
+  height:1px !important;
+  opacity:0 !important;
+  pointer-events:none !important;
+}
+
+
+/* ===== Talkio reliable audio-call button ===== */
+.head-actions button,
+.icon-green{
+  touch-action:manipulation;
+}
+
+
+/* ===== Talkio audio call final fix ===== */
+.remote-call-audio{
+  position:absolute !important;
+  width:1px !important;
+  height:1px !important;
+  opacity:0 !important;
+  pointer-events:none !important;
+}
+
+
+/* Talkio microphone update:
+   noise reduction is handled in App.jsx via supported WebRTC speech constraints.
+   No visual/layout changes are required here. */
+
+
+/* Talkio single-audio playback fix:
+   remote call audio is deduplicated in App.jsx to prevent repeated sound. */
+
+
+/* Talkio call audio now relies on native WebRTC acoustic echo cancellation.
+   Custom WebAudio mic processing was removed because it can create/strengthen
+   echo on mobile browsers. */
+
+
+/* Talkio single-audio / anti-repeat mode:
+   App.jsx uses native WebRTC noise suppression plus a remote-speech guard.
+   During remote speech the local microphone is temporarily disabled to stop
+   speaker-to-microphone feedback from repeating the same voice many times. */
+
+
+/* Delete message button */
+.message-delete-btn{border:0;background:transparent;padding:2px;margin-left:3px;display:inline-grid;place-items:center;cursor:pointer;opacity:.72;color:inherit;border-radius:50%;vertical-align:middle}
+.message-delete-btn:hover{opacity:1;background:rgba(0,0,0,.08)}
+.message-delete-btn svg{width:14px;height:14px}
